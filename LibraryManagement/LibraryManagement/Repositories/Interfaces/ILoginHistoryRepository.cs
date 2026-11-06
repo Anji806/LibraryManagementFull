@@ -1,0 +1,14 @@
+using LibraryManagement.DTOs.LoginHistory;
+using LibraryManagement.Models;
+
+namespace LibraryManagement.Repositories.Interfaces;
+
+public interface ILoginHistoryRepository
+{
+    Task InsertLoginHistoryAsync(LoginHistory entry);
+    Task<LoginHistory?> RecordLogoutAsync(string sessionId, DateTime logoutDateTime);
+    Task<int> DeleteLoginHistoryAsync(IReadOnlyCollection<long> loginLogIds);
+    Task<LoginHistoryPage> GetLoginHistoryAsync(LoginHistoryQuery query);
+    Task<IReadOnlyList<LoginHistory>> GetLoginHistoryByUserIdAsync(int userId, int page, int pageSize);
+    Task<IReadOnlyList<LoginHistory>> GetLoginHistoryByDateRangeAsync(DateTime fromUtc, DateTime toUtc, int page, int pageSize);
+}

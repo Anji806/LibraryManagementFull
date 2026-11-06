@@ -1,0 +1,53 @@
+0000000000000000000000000000000000000000 52b7ebe5054c406897b8e44ccae085fa9671d851 Ajith <ajithkumarbeemani994@gmail.com> 1790076837 +0530	commit (initial): Initial commit
+52b7ebe5054c406897b8e44ccae085fa9671d851 0000000000000000000000000000000000000000 Ajith <ajithkumarbeemani994@gmail.com> 1790077110 +0530	Branch: renamed refs/heads/master to refs/heads/main
+0000000000000000000000000000000000000000 52b7ebe5054c406897b8e44ccae085fa9671d851 Ajith <ajithkumarbeemani994@gmail.com> 1790077110 +0530	Branch: renamed refs/heads/master to refs/heads/main
+52b7ebe5054c406897b8e44ccae085fa9671d851 813589db3a71e7faa1387b320f1844ef50eb6cab Anji <anjaneyulu.j@deccansoft.net> 1790079152 +0530	commit: Updated BooksController
+813589db3a71e7faa1387b320f1844ef50eb6cab 813589db3a71e7faa1387b320f1844ef50eb6cab Anji <anjaneyulu.j@deccansoft.net> 1790222230 +0530	checkout: moving from main to feature-login
+813589db3a71e7faa1387b320f1844ef50eb6cab ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1790223111 +0530	commit: Add DemoController
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 813589db3a71e7faa1387b320f1844ef50eb6cab Anji <anjaneyulu.j@deccansoft.net> 1790223411 +0530	checkout: moving from feature-login to main
+813589db3a71e7faa1387b320f1844ef50eb6cab ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1790223536 +0530	merge feature-login: Fast-forward
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1790223757 +0530	checkout: moving from main to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1790224804 +0530	checkout: moving from feature-login to main
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1790226052 +0530	checkout: moving from main to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1790226201 +0530	checkout: moving from feature-login to main
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792643114 +0530	checkout: moving from main to main
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792643161 +0530	checkout: moving from main to main
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792643168 +0530	checkout: moving from main to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792643181 +0530	checkout: moving from feature-login to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792644392 +0530	checkout: moving from feature-login to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792663081 +0530	checkout: moving from feature-login to main
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 5ac7b33e25a83fb6ad2e6f9bbaca7a09173ec1cd Anji <anjaneyulu.j@deccansoft.net> 1792667199 +0530	commit: Update project files
+5ac7b33e25a83fb6ad2e6f9bbaca7a09173ec1cd 5ac7b33e25a83fb6ad2e6f9bbaca7a09173ec1cd Anji <anjaneyulu.j@deccansoft.net> 1792667235 +0530	checkout: moving from main to main
+5ac7b33e25a83fb6ad2e6f9bbaca7a09173ec1cd ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792667595 +0530	checkout: moving from main to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792667893 +0530	checkout: moving from feature-login to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 5ac7b33e25a83fb6ad2e6f9bbaca7a09173ec1cd Anji <anjaneyulu.j@deccansoft.net> 1792667899 +0530	checkout: moving from feature-login to main
+5ac7b33e25a83fb6ad2e6f9bbaca7a09173ec1cd ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792669526 +0530	checkout: moving from main to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 ce6b4aa0168f52c15b5bae9923c914c0b69bc046 Anji <anjaneyulu.j@deccansoft.net> 1792669717 +0530	checkout: moving from feature-login to feature-login
+ce6b4aa0168f52c15b5bae9923c914c0b69bc046 5ac7b33e25a83fb6ad2e6f9bbaca7a09173ec1cd Anji <anjaneyulu.j@deccansoft.net> 1792669926 +0530	checkout: moving from feature-login to main
+5ac7b33e25a83fb6ad2e6f9bbaca7a09173ec1cd 2927e387cc70462cd84f87a0ca37807617ca7115 Anji <anjaneyulu.j@deccansoft.net> 1792669935 +0530	pull --tags origin main: Fast-forward
+2927e387cc70462cd84f87a0ca37807617ca7115 2e09c9d0bf32be4d14ddbaca7da896e644d166d3 Anji <anjaneyulu.j@deccansoft.net> 1792670037 +0530	commit: authchange
+2e09c9d0bf32be4d14ddbaca7da896e644d166d3 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792670233 +0530	commit: authchanges1
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792731254 +0530	checkout: moving from main to developement
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792731268 +0530	checkout: moving from developement to developement
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792731274 +0530	checkout: moving from developement to developement
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da 664873897ed6d375e7d482927d79fbc5e58831ea Anji <anjaneyulu.j@deccansoft.net> 1792731340 +0530	commit: adding the memeber1 file
+664873897ed6d375e7d482927d79fbc5e58831ea 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792734155 +0530	checkout: moving from developement to main
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da 664873897ed6d375e7d482927d79fbc5e58831ea Anji <anjaneyulu.j@deccansoft.net> 1792734322 +0530	checkout: moving from main to developement
+664873897ed6d375e7d482927d79fbc5e58831ea bf7428f9d29dcd2fb80195a62d5dd70d49982d96 Anji <anjaneyulu.j@deccansoft.net> 1792734576 +0530	checkout: moving from developement to testing
+bf7428f9d29dcd2fb80195a62d5dd70d49982d96 bf7428f9d29dcd2fb80195a62d5dd70d49982d96 Anji <anjaneyulu.j@deccansoft.net> 1792734601 +0530	checkout: moving from testing to testing
+bf7428f9d29dcd2fb80195a62d5dd70d49982d96 664873897ed6d375e7d482927d79fbc5e58831ea Anji <anjaneyulu.j@deccansoft.net> 1792734730 +0530	checkout: moving from testing to developement
+664873897ed6d375e7d482927d79fbc5e58831ea 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792734743 +0530	checkout: moving from developement to main
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da 664873897ed6d375e7d482927d79fbc5e58831ea Anji <anjaneyulu.j@deccansoft.net> 1792735811 +0530	checkout: moving from main to developement
+664873897ed6d375e7d482927d79fbc5e58831ea bd60fb22ced10e1004ccf2a6e02baf553337114b Anji <anjaneyulu.j@deccansoft.net> 1792735866 +0530	commit: adding new line about merging
+bd60fb22ced10e1004ccf2a6e02baf553337114b 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792735956 +0530	checkout: moving from developement to main
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792736122 +0530	checkout: moving from main to merge
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da 156ecaf6aa6e53dd9d72e23d6fda1732bbca79da Anji <anjaneyulu.j@deccansoft.net> 1792736167 +0530	checkout: moving from merge to main
+156ecaf6aa6e53dd9d72e23d6fda1732bbca79da bd60fb22ced10e1004ccf2a6e02baf553337114b Anji <anjaneyulu.j@deccansoft.net> 1792736268 +0530	merge developement: Fast-forward
+bd60fb22ced10e1004ccf2a6e02baf553337114b fbf86415ea6913a60e134b77a0345e693e23540d Anji <anjaneyulu.j@deccansoft.net> 1792738316 +0530	pull --tags origin main: Fast-forward
+fbf86415ea6913a60e134b77a0345e693e23540d bf7428f9d29dcd2fb80195a62d5dd70d49982d96 Anji <anjaneyulu.j@deccansoft.net> 1792740085 +0530	checkout: moving from main to testing
+bf7428f9d29dcd2fb80195a62d5dd70d49982d96 fbf86415ea6913a60e134b77a0345e693e23540d Anji <anjaneyulu.j@deccansoft.net> 1793689358 +0530	checkout: moving from testing to main
+fbf86415ea6913a60e134b77a0345e693e23540d bbbc4b721ad5bb8b608d36738fdc9297ec747011 Anji <anjaneyulu.j@deccansoft.net> 1793689432 +0530	commit: chnage the db pattern efcore to dapper
+bbbc4b721ad5bb8b608d36738fdc9297ec747011 cb4096341ee14f2033f711092f60946e07d02a39 Anji <anjaneyulu.j@deccansoft.net> 1793788504 +0530	commit: tried the continue with google feture not done
+cb4096341ee14f2033f711092f60946e07d02a39 465838e61a89b9d01a11251247ef6b5de4214226 Anji <anjaneyulu.j@deccansoft.net> 1793788510 +0530	pull --tags origin main: Merge made by the 'ort' strategy.
+465838e61a89b9d01a11251247ef6b5de4214226 0a9bcc6eb0f183ebda7e9b00a3b7fa81b7dec7dc Anji <anjaneyulu.j@deccansoft.net> 1793880733 +0530	commit: adding the feature login history of users
+0a9bcc6eb0f183ebda7e9b00a3b7fa81b7dec7dc cac48d2779efb71f81c19389a8501f073db1a9f2 Anji <anjaneyulu.j@deccansoft.net> 1793943314 +0530	commit: setting book catelog

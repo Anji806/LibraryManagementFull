@@ -1,0 +1,12 @@
+Member 2 - Testing Branch
+Name: Bob
+Branch: testing
+This is my second practice file.
+I am learning how team members work with separate branches.
+My tasks:
+Create a separate branch
+Stage this file
+Commit the changes
+Push the branch to GitHub
+theee
+pravalika

@@ -1,0 +1,13 @@
+Member 1 - Development Branch
+
+Name: Alice
+Branch: development
+
+This is my first practice file.
+I am learning Git and GitHub using VS Code.
+My tasks:
+- Create a branch
+- Stage this file
+- Commit the changes
+- Push the branch to GitHub
+-then merged to the main to see the changes

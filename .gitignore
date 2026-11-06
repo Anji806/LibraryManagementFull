@@ -1,0 +1,17 @@
+# Frontend
+library-management-ui/node_modules/
+library-management-ui/dist/
+library-management-ui/.env.local
+
+# Backend
+LibraryManagement/bin/
+LibraryManagement/obj/
+
+# IDE
+.vs/
+.idea/
+
+# Secrets
+.env
+.env.local
+.validation/
