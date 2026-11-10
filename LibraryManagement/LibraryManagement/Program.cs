@@ -11,15 +11,14 @@ using LibraryManagement.Realtime;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 
 using System.Text;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Write application logs to stdout. The Windows Event Log provider can throw
-// when this process lacks Event Log permissions, masking request failures.
+// Write application logs to stdout.
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
@@ -56,13 +55,27 @@ builder.Services.AddCors(options =>
 // DATABASE
 // ==================================================
 
-var databaseDirectory = Path.Combine(builder.Environment.ContentRootPath, "Data");
+var databaseDirectory = Path.Combine(
+    builder.Environment.ContentRootPath, "Data");
+
 Directory.CreateDirectory(databaseDirectory);
-var configuredConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is missing.");
-var sqliteConnectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(configuredConnectionString);
+
+var configuredConnectionString =
+    builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException(
+        "Connection string 'DefaultConnection' is missing.");
+
+var sqliteConnectionString =
+    new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(
+        configuredConnectionString);
+
 if (!Path.IsPathRooted(sqliteConnectionString.DataSource))
-    sqliteConnectionString.DataSource = Path.GetFullPath(sqliteConnectionString.DataSource, builder.Environment.ContentRootPath);
+{
+    sqliteConnectionString.DataSource = Path.GetFullPath(
+        sqliteConnectionString.DataSource,
+        builder.Environment.ContentRootPath);
+}
+
 sqliteConnectionString.ForeignKeys = true;
 sqliteConnectionString.DefaultTimeout = 30;
 
@@ -160,20 +173,11 @@ builder.Services.AddSwaggerGen(options =>
             Description = "Enter your JWT token. Example: Bearer {your-token}"
         });
 
-    options.AddSecurityRequirement(
+    // Updated OpenAPI security reference syntax
+    options.AddSecurityRequirement(document =>
         new OpenApiSecurityRequirement
         {
-            {
-                new OpenApiSecurityScheme
-                {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
-                },
-                Array.Empty<string>()
-            }
+            [new OpenApiSecuritySchemeReference("Bearer", document)] = []
         });
 });
 
@@ -184,45 +188,74 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 var trustedProxyAddresses = builder.Configuration
-    .GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    .GetSection("ForwardedHeaders:KnownProxies")
+    .Get<string[]>() ?? [];
+
 var trustedProxyIps = new HashSet<System.Net.IPAddress>
 {
     System.Net.IPAddress.Loopback,
     System.Net.IPAddress.IPv6Loopback
 };
+
 foreach (var address in trustedProxyAddresses)
 {
     if (System.Net.IPAddress.TryParse(address, out var proxyAddress))
+    {
         trustedProxyIps.Add(proxyAddress);
+    }
 }
 
-static System.Net.IPAddress NormalizeIp(System.Net.IPAddress address)
-    => address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
+static System.Net.IPAddress NormalizeIp(
+    System.Net.IPAddress address)
+    => address.IsIPv4MappedToIPv6
+        ? address.MapToIPv4()
+        : address;
 
 var forwardedHeaders = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto,
     ForwardLimit = 1
 };
+
 foreach (var proxyAddress in trustedProxyIps)
 {
     forwardedHeaders.KnownProxies.Add(proxyAddress);
-    if (proxyAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-        forwardedHeaders.KnownProxies.Add(proxyAddress.MapToIPv6());
+
+    if (proxyAddress.AddressFamily ==
+        System.Net.Sockets.AddressFamily.InterNetwork)
+    {
+        forwardedHeaders.KnownProxies.Add(
+            proxyAddress.MapToIPv6());
+    }
 }
 
-// X-Forwarded-For takes precedence. Accept X-Real-IP only from the directly
-// connected, explicitly trusted proxy and normalize it for ASP.NET middleware.
+// X-Forwarded-For takes precedence. Accept X-Real-IP only from
+// the directly connected, explicitly trusted proxy.
 app.Use(async (context, next) =>
 {
     var peer = context.Connection.RemoteIpAddress;
-    var realIp = context.Request.Headers["X-Real-IP"].FirstOrDefault();
-    var hasForwardedFor = !string.IsNullOrWhiteSpace(context.Request.Headers["X-Forwarded-For"].ToString());
-    if (peer is not null && trustedProxyIps.Contains(NormalizeIp(peer)) &&
-        !hasForwardedFor && System.Net.IPAddress.TryParse(realIp, out var clientIp))
-        context.Request.Headers["X-Forwarded-For"] = clientIp.ToString();
+
+    var realIp =
+        context.Request.Headers["X-Real-IP"].FirstOrDefault();
+
+    var hasForwardedFor =
+        !string.IsNullOrWhiteSpace(
+            context.Request.Headers["X-Forwarded-For"].ToString());
+
+    if (peer is not null &&
+        trustedProxyIps.Contains(NormalizeIp(peer)) &&
+        !hasForwardedFor &&
+        System.Net.IPAddress.TryParse(realIp, out var clientIp))
+    {
+        context.Request.Headers["X-Forwarded-For"] =
+            clientIp.ToString();
+    }
+
     await next();
 });
+
 app.UseForwardedHeaders(forwardedHeaders);
 
 await BookPreviewContentInitializer.InitializeAsync(
@@ -250,7 +283,6 @@ app.UseHttpsRedirection();
 // ==================================================
 
 app.UseRouting();
-
 app.UseCors("AllowFrontend");
 
 // ==================================================
