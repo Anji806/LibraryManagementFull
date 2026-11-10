@@ -1,0 +1,10 @@
+﻿**/bin/
+**/obj/
+.vs/
+.git/
+.git-backup/
+**/*.user
+**/*.db
+**/*.db-wal
+**/*.db-shm
+.validation/
