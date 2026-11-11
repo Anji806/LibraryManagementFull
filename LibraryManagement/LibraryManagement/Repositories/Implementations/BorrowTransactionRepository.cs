@@ -1,63 +1,52 @@
-using Dapper;
 using LibraryManagement.Data;
 using LibraryManagement.Models;
 using LibraryManagement.Repositories.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagement.Repositories.Implementations;
 
 public class BorrowTransactionRepository
     : IBorrowTransactionRepository
 {
-    private readonly IDapperUnitOfWork _uow;
+    private readonly ApplicationDbContext _context;
 
     public BorrowTransactionRepository(
-        IDapperUnitOfWork uow)
+        ApplicationDbContext context)
     {
-        _uow = uow;
+        _context = context;
     }
 
-    private async Task<List<BorrowTransaction>> QueryWithRelationsAsync(
-        string whereAndOrder,
-        object? parameters)
-    {
-        var connection = await _uow.GetConnectionAsync();
-
-        var transactions = await connection.QueryAsync<
-            BorrowTransaction, Book, Author, Category, User?, BorrowTransaction>(
-            DapperQueries.TransactionWithRelations + " " + whereAndOrder,
-            DapperQueries.MapTransaction,
-            parameters,
-            splitOn: DapperQueries.TransactionWithRelationsSplitOn);
-
-        return transactions.ToList();
-    }
-
-    // Get one transaction by ID
-    // Loads:
     // BorrowTransaction -> Book -> Author
     // BorrowTransaction -> Book -> Category
     // BorrowTransaction -> Member
+    private IQueryable<BorrowTransaction> TransactionsWithRelations()
+        => _context.BorrowTransactions
+            .Include(t => t.Book).ThenInclude(book => book.Author)
+            .Include(t => t.Book).ThenInclude(book => book.Category)
+            .Include(t => t.Member);
+
+    private async Task<List<BorrowTransaction>> ToListWithCategoryNamesAsync(
+        IQueryable<BorrowTransaction> query)
+    {
+        var transactions = await query.ToListAsync();
+
+        await _context.PopulateCategoryNamesAsync(
+            transactions.Select(t => t.Book).ToList());
+
+        return transactions;
+    }
+
+    // Get one transaction by ID. Tracked: the return flow updates it and
+    // shares the Book / Member instances with the other repositories.
     public async Task<BorrowTransaction?> GetByIdAsync(
         int transactionId)
     {
-        var transactions = await QueryWithRelationsAsync(
-            "WHERE t.TransactionId = @transactionId",
-            new { transactionId });
+        var transaction = await TransactionsWithRelations()
+            .FirstOrDefaultAsync(t => t.TransactionId == transactionId);
 
-        var transaction = transactions.FirstOrDefault();
-
-        if (transaction == null)
+        if (transaction != null)
         {
-            return null;
-        }
-
-        // Share the Book / Member instances with the other repositories so
-        // a change made through one is visible through the other.
-        transaction.Book = _uow.Track(transaction.Book);
-
-        if (transaction.Member != null)
-        {
-            transaction.Member = _uow.Track(transaction.Member);
+            await _context.PopulateCategoryNamesAsync([transaction.Book]);
         }
 
         return transaction;
@@ -70,30 +59,24 @@ public class BorrowTransactionRepository
             int bookId,
             int memberId)
     {
-        var connection = await _uow.GetConnectionAsync();
-
-        return await connection.QueryFirstOrDefaultAsync<BorrowTransaction>(
-            @"SELECT TransactionId, BookId, MemberId, MemberName, MemberEmail,
-                     BorrowDate, ReturnDate, Status
-              FROM BorrowTransactions
-              WHERE BookId = @bookId
-                AND MemberId = @memberId
-                AND Status = 'Borrowed'",
-            new { bookId, memberId });
+        return await _context.BorrowTransactions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t =>
+                t.BookId == bookId &&
+                t.MemberId == memberId &&
+                t.Status == "Borrowed");
     }
 
     // Get currently borrowed books for a member
-    // Loads:
-    // BorrowTransaction -> Book -> Author
-    // BorrowTransaction -> Book -> Category
-    // BorrowTransaction -> Member
     public async Task<List<BorrowTransaction>>
         GetActiveBorrowingsByMemberAsync(
             int memberId)
     {
-        return await QueryWithRelationsAsync(
-            "WHERE t.MemberId = @memberId AND t.Status = 'Borrowed'",
-            new { memberId });
+        return await ToListWithCategoryNamesAsync(
+            TransactionsWithRelations()
+                .AsNoTracking()
+                .Where(t => t.MemberId == memberId && t.Status == "Borrowed")
+                .OrderBy(t => t.TransactionId));
     }
 
     // Get complete borrowing history for a member
@@ -101,9 +84,12 @@ public class BorrowTransactionRepository
         GetBorrowHistoryByMemberAsync(
             int memberId)
     {
-        return await QueryWithRelationsAsync(
-            "WHERE t.MemberId = @memberId ORDER BY t.BorrowDate DESC",
-            new { memberId });
+        return await ToListWithCategoryNamesAsync(
+            TransactionsWithRelations()
+                .AsNoTracking()
+                .Where(t => t.MemberId == memberId)
+                .OrderByDescending(t => t.BorrowDate)
+                .ThenBy(t => t.TransactionId));
     }
 
     // Get complete borrowing history for a book
@@ -111,57 +97,38 @@ public class BorrowTransactionRepository
         GetBorrowHistoryByBookAsync(
             int bookId)
     {
-        return await QueryWithRelationsAsync(
-            "WHERE t.BookId = @bookId ORDER BY t.BorrowDate DESC",
-            new { bookId });
+        return await ToListWithCategoryNamesAsync(
+            TransactionsWithRelations()
+                .AsNoTracking()
+                .Where(t => t.BookId == bookId)
+                .OrderByDescending(t => t.BorrowDate)
+                .ThenBy(t => t.TransactionId));
     }
 
     // Add a new borrowing transaction
     public async Task AddAsync(
         BorrowTransaction transaction)
     {
-        // Same relationship fix-up EF did for tracked Book / Member.
-        transaction.Book = _uow.FindTrackedBook(transaction.BookId)!;
+        transaction.BorrowDate = transaction.BorrowDate.AsUtc();
+        transaction.ReturnDate = transaction.ReturnDate.AsUtc();
 
-        if (transaction.MemberId.HasValue)
-        {
-            transaction.Member = _uow.FindTrackedUser(transaction.MemberId.Value);
-        }
-
-        _uow.Enqueue(async (connection, tx) =>
-        {
-            transaction.TransactionId = await connection.ExecuteScalarAsync<int>(
-                @"INSERT INTO BorrowTransactions
-                    (BookId, MemberId, MemberName, MemberEmail, BorrowDate, ReturnDate, Status)
-                  VALUES
-                    (@BookId, @MemberId, @MemberName, @MemberEmail, @BorrowDate, @ReturnDate, @Status); "
-                + _uow.LastInsertIdQuery,
-                transaction, tx);
-        });
-
-        await Task.CompletedTask;
+        await _context.BorrowTransactions.AddAsync(transaction);
     }
 
     // Update an existing borrowing transaction
     public void Update(
         BorrowTransaction transaction)
     {
-        _uow.Enqueue((connection, tx) => connection.ExecuteAsync(
-            @"UPDATE BorrowTransactions SET
-                BookId = @BookId,
-                MemberId = @MemberId,
-                MemberName = @MemberName,
-                MemberEmail = @MemberEmail,
-                BorrowDate = @BorrowDate,
-                ReturnDate = @ReturnDate,
-                Status = @Status
-              WHERE TransactionId = @TransactionId",
-            transaction, tx));
+        transaction.BorrowDate = transaction.BorrowDate.AsUtc();
+        transaction.ReturnDate = transaction.ReturnDate.AsUtc();
+
+        _context.MarkModifiedIfDetached(transaction);
     }
 
-    // Save changes
+    // Saves every pending change of the request (book copies and the
+    // transaction) in one database transaction.
     public async Task SaveChangesAsync()
     {
-        await _uow.SaveChangesAsync();
+        await _context.SaveChangesAsync();
     }
 }

@@ -7,19 +7,19 @@ using LibraryManagement.Repositories.Interfaces;
 using LibraryManagement.Services.Implementations;
 using LibraryManagement.Services.Interfaces;
 using LibraryManagement.Realtime;
+using Microsoft.EntityFrameworkCore;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 
 using System.Text;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Write application logs to stdout. The Windows Event Log provider can throw
-// when this process lacks Event Log permissions, masking request failures.
+// Write application logs to stdout.
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
@@ -38,6 +38,7 @@ builder.Services.AddControllers()
 // CORS
 // ==================================================
 
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -45,7 +46,8 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                 "http://localhost:5173",
                 "http://localhost:3000",
-                "http://127.0.0.1:5173")
+                "http://127.0.0.1:5173",
+                "https://astounding-quokka-a67be2.netlify.app")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -56,20 +58,35 @@ builder.Services.AddCors(options =>
 // DATABASE
 // ==================================================
 
-var databaseDirectory = Path.Combine(builder.Environment.ContentRootPath, "Data");
-Directory.CreateDirectory(databaseDirectory);
-var configuredConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is missing.");
-var sqliteConnectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(configuredConnectionString);
-if (!Path.IsPathRooted(sqliteConnectionString.DataSource))
-    sqliteConnectionString.DataSource = Path.GetFullPath(sqliteConnectionString.DataSource, builder.Environment.ContentRootPath);
-sqliteConnectionString.ForeignKeys = true;
-sqliteConnectionString.DefaultTimeout = 30;
+if (builder.Environment.IsProduction())
+{
+    // Production: Neon PostgreSQL on Render
+    var connectionString =
+        DatabaseConnection.Resolve(builder.Configuration);
 
-builder.Services.AddSingleton<IDbConnectionFactory>(_ =>
-    new SqliteConnectionFactory(sqliteConnectionString.ToString()));
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseNpgsql(
+            connectionString,
+            npgsql => npgsql.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null)));
+}
+else
+{
+    // Local development: SQLite
+    var connectionString =
+        builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddScoped<IDapperUnitOfWork, DapperUnitOfWork>();
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            "SQLite connection string is missing.");
+    }
+
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite(connectionString));
+}
 
 // ==================================================
 // REPOSITORIES
@@ -160,20 +177,11 @@ builder.Services.AddSwaggerGen(options =>
             Description = "Enter your JWT token. Example: Bearer {your-token}"
         });
 
-    options.AddSecurityRequirement(
+    // Updated OpenAPI security reference syntax
+    options.AddSecurityRequirement(document =>
         new OpenApiSecurityRequirement
         {
-            {
-                new OpenApiSecurityScheme
-                {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
-                },
-                Array.Empty<string>()
-            }
+            [new OpenApiSecuritySchemeReference("Bearer", document)] = []
         });
 });
 
@@ -184,50 +192,100 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 var trustedProxyAddresses = builder.Configuration
-    .GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    .GetSection("ForwardedHeaders:KnownProxies")
+    .Get<string[]>() ?? [];
+
 var trustedProxyIps = new HashSet<System.Net.IPAddress>
 {
     System.Net.IPAddress.Loopback,
     System.Net.IPAddress.IPv6Loopback
 };
+
 foreach (var address in trustedProxyAddresses)
 {
     if (System.Net.IPAddress.TryParse(address, out var proxyAddress))
+    {
         trustedProxyIps.Add(proxyAddress);
+    }
 }
 
-static System.Net.IPAddress NormalizeIp(System.Net.IPAddress address)
-    => address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
+static System.Net.IPAddress NormalizeIp(
+    System.Net.IPAddress address)
+    => address.IsIPv4MappedToIPv6
+        ? address.MapToIPv4()
+        : address;
 
 var forwardedHeaders = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto,
     ForwardLimit = 1
 };
+
 foreach (var proxyAddress in trustedProxyIps)
 {
     forwardedHeaders.KnownProxies.Add(proxyAddress);
-    if (proxyAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-        forwardedHeaders.KnownProxies.Add(proxyAddress.MapToIPv6());
+
+    if (proxyAddress.AddressFamily ==
+        System.Net.Sockets.AddressFamily.InterNetwork)
+    {
+        forwardedHeaders.KnownProxies.Add(
+            proxyAddress.MapToIPv6());
+    }
 }
 
-// X-Forwarded-For takes precedence. Accept X-Real-IP only from the directly
-// connected, explicitly trusted proxy and normalize it for ASP.NET middleware.
+// X-Forwarded-For takes precedence. Accept X-Real-IP only from
+// the directly connected, explicitly trusted proxy.
 app.Use(async (context, next) =>
 {
     var peer = context.Connection.RemoteIpAddress;
-    var realIp = context.Request.Headers["X-Real-IP"].FirstOrDefault();
-    var hasForwardedFor = !string.IsNullOrWhiteSpace(context.Request.Headers["X-Forwarded-For"].ToString());
-    if (peer is not null && trustedProxyIps.Contains(NormalizeIp(peer)) &&
-        !hasForwardedFor && System.Net.IPAddress.TryParse(realIp, out var clientIp))
-        context.Request.Headers["X-Forwarded-For"] = clientIp.ToString();
+
+    var realIp =
+        context.Request.Headers["X-Real-IP"].FirstOrDefault();
+
+    var hasForwardedFor =
+        !string.IsNullOrWhiteSpace(
+            context.Request.Headers["X-Forwarded-For"].ToString());
+
+    if (peer is not null &&
+        trustedProxyIps.Contains(NormalizeIp(peer)) &&
+        !hasForwardedFor &&
+        System.Net.IPAddress.TryParse(realIp, out var clientIp))
+    {
+        context.Request.Headers["X-Forwarded-For"] =
+            clientIp.ToString();
+    }
+
     await next();
 });
+
 app.UseForwardedHeaders(forwardedHeaders);
 
-await BookPreviewContentInitializer.InitializeAsync(
-    app.Services.GetRequiredService<IDbConnectionFactory>(),
-    app.Environment.ContentRootPath);
+// Fail fast with a clear message when no database is configured.
+if (app.Environment.IsProduction())
+{
+    DatabaseConnection.Resolve(app.Configuration);
+}
+
+// PostgreSQL: applies pending EF Core migrations (additive; never drops or
+// recreates tables). SQLite (local development) has no migrations: its schema
+// is only created when the file is empty. Set Database:MigrateOnStartup=false
+// to disable.
+if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    if (db.Database.IsNpgsql())
+    {
+        await db.Database.MigrateAsync();
+    }
+    else
+    {
+        await db.Database.EnsureCreatedAsync();
+    }
+}
 
 // ==================================================
 // SWAGGER
@@ -250,7 +308,6 @@ app.UseHttpsRedirection();
 // ==================================================
 
 app.UseRouting();
-
 app.UseCors("AllowFrontend");
 
 // ==================================================

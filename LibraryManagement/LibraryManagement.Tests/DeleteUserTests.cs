@@ -112,22 +112,18 @@ public class DeleteUserTests : IClassFixture<LibraryApiFactory>
     }
 
     [Theory]
-    [InlineData("Returned", "returned borrowing record")]
-    [InlineData("Borrowed", "not yet returned")]
-    public async Task Delete_UserWithBorrowHistory_ReturnsConflictWithClearMessage(
-        string status,
-        string expectedText)
+    [InlineData("Returned")]
+    [InlineData("Borrowed")]
+    public async Task Delete_UserWithBorrowHistory_AsAdmin_ReturnsNoContent(
+        string status)
     {
         var (client, _) = await ClientForAsync("Admin");
         var id = await SeedMemberAsync(status);
 
         var response = await client.DeleteAsync($"/api/users/{id}");
-        var body = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Contains(expectedText, body);
-        Assert.Contains("deactivate", body, StringComparison.OrdinalIgnoreCase);
-        Assert.True(await UserExistsAsync(id));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.False(await UserExistsAsync(id));
     }
 
     [Fact]

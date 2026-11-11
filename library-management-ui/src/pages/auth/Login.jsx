@@ -55,15 +55,15 @@ export function Login() {
     <main className="auth-shell">
       <aside className="auth-aside">
         <div className="brand">
-          {/* <span>Greenleaf Library</span> */}
+           <span>Greenleaf Library</span> 
         </div>
         <div className="auth-aside-copy">
-          {/* <img className="auth-hero-logo" src="/Library_icon.png" alt="Greenleaf Library" width="220" height="220" /> */}
-          {/* <p className="eyebrow">A quieter place to grow</p> */}
-          {/* <h1>Knowledge belongs to everyone.</h1> */}
-          {/* <p>Sign in to continue to your library workspace</p> */}
+           <img className="auth-hero-logo" src="/Library_icon.png" alt="Greenleaf Library" width="220" height="220" /> 
+           <p className="eyebrow">A quieter place to grow</p> 
+           <h1>Knowledge belongs to everyone.</h1> 
+           <p>Sign in to continue to your library workspace</p> 
         </div>
-        {/* <p className="auth-footer">Library Management System</p> */}
+         <p className="auth-footer">Library Management System</p> 
       </aside>
       <section className="auth-panel">
         <div className="auth-form-wrap">

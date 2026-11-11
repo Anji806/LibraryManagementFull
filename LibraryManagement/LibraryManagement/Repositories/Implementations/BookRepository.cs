@@ -1,138 +1,144 @@
-using Dapper;
 using LibraryManagement.Data;
 using LibraryManagement.Models;
 using LibraryManagement.Repositories.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagement.Repositories.Implementations;
 
 public class BookRepository : IBookRepository
 {
-    private readonly IDapperUnitOfWork _uow;
+    private const string BookCategoriesTable = "BookCategories";
 
-    public BookRepository(IDapperUnitOfWork uow)
+    private readonly ApplicationDbContext _context;
+
+    // Books whose primary category must be present in BookCategories when
+    // the changes are saved.
+    private readonly List<Book> _booksToLink = new();
+
+    public BookRepository(ApplicationDbContext context)
     {
-        _uow = uow;
+        _context = context;
     }
+
+    private IQueryable<Book> BooksWithRelations()
+        => _context.Books
+            .Include(book => book.Author)
+            .Include(book => book.Category);
 
     public async Task<List<Book>> GetAllAsync()
     {
-        var connection = await _uow.GetConnectionAsync();
+        var books = await BooksWithRelations()
+            .AsNoTracking()
+            .OrderBy(book => book.BookId)
+            .ToListAsync();
 
-        var books = await connection.QueryAsync<Book, Author, Category, Book>(
-            DapperQueries.BookWithRelations,
-            DapperQueries.MapBook,
-            splitOn: DapperQueries.BookWithRelationsSplitOn);
+        await _context.PopulateCategoryNamesAsync(books);
 
-        return books.ToList();
+        return books;
     }
 
+    // Tracked: callers modify, borrow against or delete the book.
     public async Task<Book?> GetByIdAsync(int id)
     {
-        var connection = await _uow.GetConnectionAsync();
+        var book = await BooksWithRelations()
+            .FirstOrDefaultAsync(book => book.BookId == id);
 
-        var books = await connection.QueryAsync<Book, Author, Category, Book>(
-            DapperQueries.BookWithRelations + " WHERE b.BookId = @id",
-            DapperQueries.MapBook,
-            new { id },
-            splitOn: DapperQueries.BookWithRelationsSplitOn);
+        if (book != null)
+        {
+            await _context.PopulateCategoryNamesAsync([book]);
+        }
 
-        var book = books.FirstOrDefault();
-
-        return book == null ? null : _uow.Track(book);
+        return book;
     }
 
+    // Case-insensitive "contains" on the title.
     public async Task<List<Book>> SearchAsync(string title)
     {
-        var connection = await _uow.GetConnectionAsync();
+        var term = title.ToLower();
 
-        var books = await connection.QueryAsync<Book, Author, Category, Book>(
-            DapperQueries.BookWithRelations
-                + @" WHERE b.Title LIKE @pattern ESCAPE '\'",
-            DapperQueries.MapBook,
-            new { pattern = DapperQueries.ContainsPattern(title) },
-            splitOn: DapperQueries.BookWithRelationsSplitOn);
+        var books = await BooksWithRelations()
+            .AsNoTracking()
+            .Where(book => book.Title.ToLower().Contains(term))
+            .OrderBy(book => book.BookId)
+            .ToListAsync();
 
-        return books.ToList();
+        await _context.PopulateCategoryNamesAsync(books);
+
+        return books;
     }
 
     public async Task AddAsync(Book book)
     {
-        _uow.Enqueue(async (connection, tx) =>
-        {
-            book.BookId = await connection.ExecuteScalarAsync<int>(
-                @"INSERT INTO Books
-                    (Title, ISBN, AuthorId, CategoryId, TotalCopies, AvailableCopies, PublishedYear,
-                     PreviewIntroduction, PreviewTheme, PreviewAbstract, PreviewMotto, PreviewWhyRead, CoverUrl)
-                  VALUES
-                    (@Title, @ISBN, @AuthorId, @CategoryId, @TotalCopies, @AvailableCopies, @PublishedYear,
-                     @PreviewIntroduction, @PreviewTheme, @PreviewAbstract, @PreviewMotto, @PreviewWhyRead, @CoverUrl); "
-                + _uow.LastInsertIdQuery,
-                book, tx);
-            await connection.ExecuteAsync(
-                "INSERT OR IGNORE INTO BookCategories (BookId, CategoryId) VALUES (@BookId, @CategoryId)",
-                new { book.BookId, book.CategoryId }, tx);
-        });
-
-        await Task.CompletedTask;
+        await _context.Books.AddAsync(book);
+        _booksToLink.Add(book);
     }
 
     public void Update(Book book)
     {
-        _uow.Enqueue(async (connection, tx) =>
-        {
-            await connection.ExecuteAsync(@"UPDATE Books SET
-                Title = @Title,
-                ISBN = @ISBN,
-                AuthorId = @AuthorId,
-                CategoryId = @CategoryId,
-                TotalCopies = @TotalCopies,
-                AvailableCopies = @AvailableCopies,
-                PublishedYear = @PublishedYear,
-                PreviewIntroduction = @PreviewIntroduction,
-                PreviewTheme = @PreviewTheme,
-                PreviewAbstract = @PreviewAbstract,
-                PreviewMotto = @PreviewMotto,
-                PreviewWhyRead = @PreviewWhyRead,
-                CoverUrl = @CoverUrl
-              WHERE BookId = @BookId",
-            book, tx);
-            await connection.ExecuteAsync(
-                "INSERT OR IGNORE INTO BookCategories (BookId, CategoryId) VALUES (@BookId, @CategoryId)",
-                new { book.BookId, book.CategoryId }, tx);
-        });
+        _context.MarkModifiedIfDetached(book);
+        _booksToLink.Add(book);
     }
 
     public void Delete(Book book)
     {
-        _uow.Enqueue((connection, tx) => connection.ExecuteAsync(
-            "DELETE FROM Books WHERE BookId = @BookId",
-            new { book.BookId }, tx));
+        // BookCategories rows go with the book (ON DELETE CASCADE).
+        _context.Books.Remove(book);
     }
 
     public async Task<bool> HasBorrowHistoryAsync(int bookId)
     {
-        var connection = await _uow.GetConnectionAsync();
-
-        var count = await connection.ExecuteScalarAsync<int>(
-            "SELECT COUNT(1) FROM BorrowTransactions WHERE BookId = @bookId",
-            new { bookId });
-
-        return count > 0;
+        return await _context.BorrowTransactions
+            .AnyAsync(t => t.BookId == bookId);
     }
 
     public async Task<bool> ExistsAsync(int bookId)
     {
-        var connection = await _uow.GetConnectionAsync();
-
-        var count = await connection.ExecuteScalarAsync<int>(
-            "SELECT COUNT(1) FROM Books WHERE BookId = @bookId",
-            new { bookId });
-
-        return count > 0;
+        return await _context.Books.AnyAsync(book => book.BookId == bookId);
     }
 
     public async Task SaveChangesAsync()
     {
-        await _uow.SaveChangesAsync();
+        var booksToLink = _booksToLink.ToList();
+        _booksToLink.Clear();
+
+        if (booksToLink.Count == 0)
+        {
+            await _context.SaveChangesAsync();
+            return;
+        }
+
+        // The book row and its BookCategories link are saved together.
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync();
+
+            // Needed first so a new book has its generated BookId.
+            await _context.SaveChangesAsync();
+
+            var links = _context.Set<Dictionary<string, object>>(
+                BookCategoriesTable);
+
+            foreach (var book in booksToLink)
+            {
+                var linked = await links.AnyAsync(link =>
+                    EF.Property<int>(link, "BookId") == book.BookId &&
+                    EF.Property<int>(link, "CategoryId") == book.CategoryId);
+
+                if (!linked)
+                {
+                    links.Add(new Dictionary<string, object>
+                    {
+                        ["BookId"] = book.BookId,
+                        ["CategoryId"] = book.CategoryId
+                    });
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
     }
 }

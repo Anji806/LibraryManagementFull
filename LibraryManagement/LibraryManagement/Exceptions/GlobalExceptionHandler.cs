@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace LibraryManagement.Exceptions;
 
@@ -42,7 +43,7 @@ public class GlobalExceptionHandler
                 HttpStatusCode.BadRequest,
                 ex.Message);
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
+        catch (DbUpdateException ex) when (IsConstraintViolation(ex))
         {
             _logger.LogWarning(ex, "A database constraint rejected request {Method} {Path}.", context.Request.Method, context.Request.Path);
             await HandleExceptionAsync(context, HttpStatusCode.Conflict, "The requested change conflicts with existing data.");
@@ -56,6 +57,14 @@ public class GlobalExceptionHandler
                 "An unexpected server error occurred.");
         }
     }
+
+    // PostgreSQL SQLSTATE class 23 = integrity constraint violation
+    // (unique, foreign key, not null, check). Other providers (the SQLite
+    // test host) only surface constraint failures through DbUpdateException.
+    private static bool IsConstraintViolation(DbUpdateException ex)
+        => ex is not DbUpdateConcurrencyException &&
+           (ex.InnerException is not PostgresException postgres ||
+            postgres.SqlState.StartsWith("23", StringComparison.Ordinal));
 
     private static async Task HandleExceptionAsync(
         HttpContext context,
