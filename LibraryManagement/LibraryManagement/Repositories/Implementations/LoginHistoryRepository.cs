@@ -1,48 +1,47 @@
-using Dapper;
 using LibraryManagement.Data;
 using LibraryManagement.DTOs.LoginHistory;
 using LibraryManagement.Models;
 using LibraryManagement.Repositories.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagement.Repositories.Implementations;
 
-public class LoginHistoryRepository(IDapperUnitOfWork uow) : ILoginHistoryRepository
+public class LoginHistoryRepository(ApplicationDbContext context) : ILoginHistoryRepository
 {
-    private const string Columns = "LoginLogId, UserId, Username, LoginDateTime, LogoutDateTime, SessionExpiresAt, SessionId, IPAddress, Browser, OperatingSystem, LoginStatus, FailureReason, SessionStatus";
-
     public async Task InsertLoginHistoryAsync(LoginHistory entry)
     {
-        var connection = await uow.GetConnectionAsync();
-        entry.LoginLogId = await connection.ExecuteScalarAsync<long>("""
-            INSERT INTO LoginHistory (UserId, Username, LoginDateTime, LogoutDateTime, SessionExpiresAt, SessionId, IPAddress, Browser, OperatingSystem, LoginStatus, FailureReason, SessionStatus)
-            VALUES (@UserId, @Username, @LoginDateTime, @LogoutDateTime, @SessionExpiresAt, @SessionId, @IPAddress, @Browser, @OperatingSystem, @LoginStatus, @FailureReason, @SessionStatus);
-            SELECT last_insert_rowid();
-            """, entry);
+        entry.LoginDateTime = entry.LoginDateTime.AsUtc();
+        entry.LogoutDateTime = entry.LogoutDateTime.AsUtc();
+        entry.SessionExpiresAt = entry.SessionExpiresAt.AsUtc();
+
+        context.LoginHistory.Add(entry);
+        await context.SaveChangesAsync();
     }
 
     public async Task<LoginHistory?> RecordLogoutAsync(string sessionId, DateTime logoutDateTime)
     {
-        var connection = await uow.GetConnectionAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-        var item = await connection.QuerySingleOrDefaultAsync<LoginHistory>(
-            $"SELECT {Columns} FROM LoginHistory WHERE SessionId = @sessionId AND LoginStatus = 'Success' AND SessionStatus = 'Active'",
-            new { sessionId }, transaction);
+        logoutDateTime = logoutDateTime.AsUtc();
+
+        IQueryable<LoginHistory> activeSession = context.LoginHistory.Where(x =>
+            x.SessionId == sessionId &&
+            x.LoginStatus == "Success" &&
+            x.SessionStatus == "Active");
+
+        var item = await activeSession.AsNoTracking().SingleOrDefaultAsync();
         if (item is null)
         {
-            await transaction.RollbackAsync();
             return null;
         }
 
-        var updated = await connection.ExecuteAsync(
-            "UPDATE LoginHistory SET LogoutDateTime = @logoutDateTime, SessionStatus = 'Logged Out' WHERE SessionId = @sessionId AND LoginStatus = 'Success' AND SessionStatus = 'Active'",
-            new { sessionId, logoutDateTime }, transaction);
+        // Conditional UPDATE: only one concurrent logout can win.
+        var updated = await activeSession.ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.LogoutDateTime, logoutDateTime)
+            .SetProperty(x => x.SessionStatus, "Logged Out"));
         if (updated != 1)
         {
-            await transaction.RollbackAsync();
             return null;
         }
 
-        await transaction.CommitAsync();
         item.LogoutDateTime = logoutDateTime;
         item.SessionStatus = "Logged Out";
         return item;
@@ -50,63 +49,100 @@ public class LoginHistoryRepository(IDapperUnitOfWork uow) : ILoginHistoryReposi
 
     public async Task<int> DeleteLoginHistoryAsync(IReadOnlyCollection<long> loginLogIds)
     {
-        var connection = await uow.GetConnectionAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-        try
+        var ids = loginLogIds.ToArray();
+        var strategy = context.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
         {
-            var ids = new { Ids = loginLogIds };
-            var existingCount = await connection.ExecuteScalarAsync<int>(
-                "SELECT COUNT(1) FROM LoginHistory WHERE LoginLogId IN @Ids", ids, transaction);
-            if (existingCount != loginLogIds.Count)
+            await using var transaction = await context.Database.BeginTransactionAsync();
+
+            // All-or-nothing: a stale selection deletes nothing.
+            var existingCount = await context.LoginHistory
+                .CountAsync(x => ids.Contains(x.LoginLogId));
+            if (existingCount != ids.Length)
             {
                 await transaction.RollbackAsync();
                 return -1;
             }
 
-            var deletedCount = await connection.ExecuteAsync(
-                "DELETE FROM LoginHistory WHERE LoginLogId IN @Ids", ids, transaction);
+            var deletedCount = await context.LoginHistory
+                .Where(x => ids.Contains(x.LoginLogId))
+                .ExecuteDeleteAsync();
             await transaction.CommitAsync();
             return deletedCount;
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+        });
     }
 
     public async Task<LoginHistoryPage> GetLoginHistoryAsync(LoginHistoryQuery query)
     {
-        var connection = await uow.GetConnectionAsync();
-        await connection.ExecuteAsync("UPDATE LoginHistory SET SessionStatus = 'Expired' WHERE LoginStatus = 'Success' AND SessionStatus = 'Active' AND SessionExpiresAt IS NOT NULL AND SessionExpiresAt <= @now", new { now = DateTime.UtcNow });
-        var where = "WHERE (@Username IS NULL OR Username LIKE '%' || @Username || '%') AND (@Status IS NULL OR LoginStatus = @Status) AND (@FromUtc IS NULL OR LoginDateTime >= @FromUtc) AND (@ToUtc IS NULL OR LoginDateTime < @ToUtc)";
-        var parameters = new
+        var now = DateTime.UtcNow;
+        await context.LoginHistory
+            .Where(x =>
+                x.LoginStatus == "Success" &&
+                x.SessionStatus == "Active" &&
+                x.SessionExpiresAt != null &&
+                x.SessionExpiresAt <= now)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.SessionStatus, "Expired"));
+
+        var entries = context.LoginHistory.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(query.Username))
         {
-            Username = string.IsNullOrWhiteSpace(query.Username) ? null : query.Username.Trim(),
-            Status = query.Status,
-            query.FromUtc,
-            query.ToUtc,
-            Offset = (query.Page - 1) * query.PageSize,
-            query.PageSize
-        };
-        var total = await connection.ExecuteScalarAsync<int>($"SELECT COUNT(1) FROM LoginHistory {where}", parameters);
-        var items = await connection.QueryAsync<LoginHistory>($"SELECT {Columns} FROM LoginHistory {where} ORDER BY LoginDateTime {(query.SortDirection == "asc" ? "ASC" : "DESC")}, LoginLogId DESC LIMIT @PageSize OFFSET @Offset", parameters);
-        return new LoginHistoryPage { Items = items.AsList(), TotalCount = total, Page = query.Page, PageSize = query.PageSize };
+            var username = query.Username.Trim().ToLower();
+            entries = entries.Where(x => x.Username.ToLower().Contains(username));
+        }
+
+        if (query.Status is not null)
+        {
+            entries = entries.Where(x => x.LoginStatus == query.Status);
+        }
+
+        if (query.FromUtc is { } fromUtc)
+        {
+            var from = fromUtc.AsUtc();
+            entries = entries.Where(x => x.LoginDateTime >= from);
+        }
+
+        if (query.ToUtc is { } toUtc)
+        {
+            var to = toUtc.AsUtc();
+            entries = entries.Where(x => x.LoginDateTime < to);
+        }
+
+        var total = await entries.CountAsync();
+
+        var ordered = query.SortDirection == "asc"
+            ? entries.OrderBy(x => x.LoginDateTime)
+            : entries.OrderByDescending(x => x.LoginDateTime);
+
+        var items = await ordered
+            .ThenByDescending(x => x.LoginLogId)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync();
+
+        return new LoginHistoryPage { Items = items, TotalCount = total, Page = query.Page, PageSize = query.PageSize };
     }
 
     public async Task<IReadOnlyList<LoginHistory>> GetLoginHistoryByUserIdAsync(int userId, int page, int pageSize)
-        => await QueryPage("UserId = @userId", new { userId }, page, pageSize);
+        => await QueryPage(context.LoginHistory.Where(x => x.UserId == userId), page, pageSize);
 
     public async Task<IReadOnlyList<LoginHistory>> GetLoginHistoryByDateRangeAsync(DateTime fromUtc, DateTime toUtc, int page, int pageSize)
-        => await QueryPage("LoginDateTime >= @fromUtc AND LoginDateTime < @toUtc", new { fromUtc, toUtc }, page, pageSize);
-
-    private async Task<IReadOnlyList<LoginHistory>> QueryPage(string predicate, object parameters, int page, int pageSize)
     {
-        var connection = await uow.GetConnectionAsync();
-        var values = new DynamicParameters(parameters);
-        values.Add("Offset", (page - 1) * pageSize);
-        values.Add("PageSize", pageSize);
-        var rows = await connection.QueryAsync<LoginHistory>($"SELECT {Columns} FROM LoginHistory WHERE {predicate} ORDER BY LoginDateTime DESC, LoginLogId DESC LIMIT @PageSize OFFSET @Offset", values);
-        return rows.AsList();
+        var from = fromUtc.AsUtc();
+        var to = toUtc.AsUtc();
+        return await QueryPage(
+            context.LoginHistory.Where(x => x.LoginDateTime >= from && x.LoginDateTime < to),
+            page,
+            pageSize);
     }
+
+    private static async Task<IReadOnlyList<LoginHistory>> QueryPage(IQueryable<LoginHistory> entries, int page, int pageSize)
+        => await entries
+            .AsNoTracking()
+            .OrderByDescending(x => x.LoginDateTime)
+            .ThenByDescending(x => x.LoginLogId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
 }

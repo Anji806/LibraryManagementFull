@@ -1,54 +1,41 @@
-﻿using Dapper;
 using LibraryManagement.Data;
 using LibraryManagement.Models;
 using LibraryManagement.Repositories.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagement.Repositories.Implementations;
 
 public class AuthRepository : IAuthRepository
 {
-    private readonly IDapperUnitOfWork _uow;
+    private readonly ApplicationDbContext _context;
 
-    public AuthRepository(IDapperUnitOfWork uow)
+    public AuthRepository(ApplicationDbContext context)
     {
-        _uow = uow;
+        _context = context;
     }
 
+    // Email is case-insensitive (citext column / NOCASE collation).
     public async Task<User?> GetByEmailAsync(string email)
     {
-        var connection = await _uow.GetConnectionAsync();
-
-        var user = await connection.QueryFirstOrDefaultAsync<User>(
-            UserRepository.SelectUser + " WHERE Email = @email COLLATE NOCASE",
-            new { email });
-
-        return user == null ? null : _uow.Track(user);
+        return await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Email == email);
     }
 
     public async Task<User?> GetByIdAsync(int userId)
     {
-        var connection = await _uow.GetConnectionAsync();
-
-        var user = await connection.QueryFirstOrDefaultAsync<User>(
-            UserRepository.SelectUser + " WHERE UserId = @userId",
-            new { userId });
-
-        return user == null ? null : _uow.Track(user);
+        return await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(user => user.UserId == userId);
     }
 
     public async Task AddAsync(User user)
     {
-        _uow.Enqueue(async (connection, tx) =>
-        {
-            user.UserId = await UserRepository.InsertAsync(
-                connection, tx, user, _uow.LastInsertIdQuery);
-        });
-
-        await Task.CompletedTask;
+        await _context.Users.AddAsync(user);
     }
 
     public async Task SaveChangesAsync()
     {
-        await _uow.SaveChangesAsync();
+        await _context.SaveChangesAsync();
     }
 }

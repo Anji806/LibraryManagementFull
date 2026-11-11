@@ -7,6 +7,7 @@ using LibraryManagement.Repositories.Interfaces;
 using LibraryManagement.Services.Implementations;
 using LibraryManagement.Services.Interfaces;
 using LibraryManagement.Realtime;
+using Microsoft.EntityFrameworkCore;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -57,34 +58,35 @@ builder.Services.AddCors(options =>
 // DATABASE
 // ==================================================
 
-var databaseDirectory = Path.Combine(
-    builder.Environment.ContentRootPath, "Data");
-
-Directory.CreateDirectory(databaseDirectory);
-
-var configuredConnectionString =
-    builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException(
-        "Connection string 'DefaultConnection' is missing.");
-
-var sqliteConnectionString =
-    new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(
-        configuredConnectionString);
-
-if (!Path.IsPathRooted(sqliteConnectionString.DataSource))
+if (builder.Environment.IsProduction())
 {
-    sqliteConnectionString.DataSource = Path.GetFullPath(
-        sqliteConnectionString.DataSource,
-        builder.Environment.ContentRootPath);
+    // Production: Neon PostgreSQL on Render
+    var connectionString =
+        DatabaseConnection.Resolve(builder.Configuration);
+
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseNpgsql(
+            connectionString,
+            npgsql => npgsql.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null)));
 }
+else
+{
+    // Local development: SQLite
+    var connectionString =
+        builder.Configuration.GetConnectionString("DefaultConnection");
 
-sqliteConnectionString.ForeignKeys = true;
-sqliteConnectionString.DefaultTimeout = 30;
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            "SQLite connection string is missing.");
+    }
 
-builder.Services.AddSingleton<IDbConnectionFactory>(_ =>
-    new SqliteConnectionFactory(sqliteConnectionString.ToString()));
-
-builder.Services.AddScoped<IDapperUnitOfWork, DapperUnitOfWork>();
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite(connectionString));
+}
 
 // ==================================================
 // REPOSITORIES
@@ -260,9 +262,30 @@ app.Use(async (context, next) =>
 
 app.UseForwardedHeaders(forwardedHeaders);
 
-await BookPreviewContentInitializer.InitializeAsync(
-    app.Services.GetRequiredService<IDbConnectionFactory>(),
-    app.Environment.ContentRootPath);
+// Fail fast with a clear message when no database is configured.
+if (app.Environment.IsProduction())
+{
+    DatabaseConnection.Resolve(app.Configuration);
+}
+
+// PostgreSQL: applies pending EF Core migrations (additive; never drops or
+// recreates tables). SQLite (local development) has no migrations: its schema
+// is only created when the file is empty. Set Database:MigrateOnStartup=false
+// to disable.
+if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    if (db.Database.IsNpgsql())
+    {
+        await db.Database.MigrateAsync();
+    }
+    else
+    {
+        await db.Database.EnsureCreatedAsync();
+    }
+}
 
 // ==================================================
 // SWAGGER

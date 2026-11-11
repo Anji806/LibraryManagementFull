@@ -1,4 +1,4 @@
-﻿using LibraryManagement.Models;
+using LibraryManagement.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagement.Data;
@@ -22,49 +22,36 @@ public class ApplicationDbContext : DbContext
     public DbSet<BorrowTransaction> BorrowTransactions
         => Set<BorrowTransaction>();
 
+    public DbSet<LoginHistory> LoginHistory => Set<LoginHistory>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<User>()
-            .HasIndex(x => x.Email)
-            .IsUnique();
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(ApplicationDbContext).Assembly);
 
-        modelBuilder.Entity<Book>()
-            .HasIndex(x => x.ISBN)
-            .IsUnique();
+        if (Database.IsNpgsql())
+        {
+            // Email and ISBN were unique ignoring case (SQLite COLLATE NOCASE).
+            // citext keeps that behaviour, including for lookups and the
+            // unique indexes, on PostgreSQL (supported by Neon).
+            modelBuilder.HasPostgresExtension("citext");
 
-        modelBuilder.Entity<Book>()
-            .HasOne(x => x.Author)
-            .WithMany(x => x.Books)
-            .HasForeignKey(x => x.AuthorId)
-            .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<User>()
+                .Property(x => x.Email).HasColumnType("citext");
 
-        modelBuilder.Entity<Book>()
-            .HasOne(x => x.Category)
-            .WithMany()
-            .HasForeignKey(x => x.CategoryId)
-            .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Book>()
+                .Property(x => x.ISBN).HasColumnType("citext");
+        }
+        else
+        {
+            // Non-PostgreSQL providers (the SQLite-backed test host).
+            modelBuilder.Entity<User>()
+                .Property(x => x.Email).UseCollation("NOCASE");
 
-        modelBuilder.Entity<Book>()
-            .HasMany(x => x.Categories)
-            .WithMany(x => x.Books)
-            .UsingEntity<Dictionary<string, object>>(
-                "BookCategories",
-                right => right.HasOne<Category>().WithMany().HasForeignKey("CategoryId").OnDelete(DeleteBehavior.Restrict),
-                left => left.HasOne<Book>().WithMany().HasForeignKey("BookId").OnDelete(DeleteBehavior.Cascade),
-                join => join.HasKey("BookId", "CategoryId"));
-
-        modelBuilder.Entity<BorrowTransaction>()
-            .HasOne(x => x.Book)
-            .WithMany(x => x.BorrowTransactions)
-            .HasForeignKey(x => x.BookId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        modelBuilder.Entity<BorrowTransaction>()
-            .HasOne(x => x.Member)
-            .WithMany(x => x.BorrowTransactions)
-            .HasForeignKey(x => x.MemberId)
-            .OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Book>()
+                .Property(x => x.ISBN).UseCollation("NOCASE");
+        }
     }
 }

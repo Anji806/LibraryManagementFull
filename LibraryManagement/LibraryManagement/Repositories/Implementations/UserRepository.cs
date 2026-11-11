@@ -1,103 +1,71 @@
-using Dapper;
 using LibraryManagement.Data;
 using LibraryManagement.Models;
 using LibraryManagement.Repositories.Interfaces;
-using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagement.Repositories.Implementations;
 
 public class UserRepository : IUserRepository
 {
-    internal const string SelectUser =
-        "SELECT UserId, FullName, Email, PasswordHash, Role, IsActive, Address FROM Users";
+    private readonly ApplicationDbContext _context;
 
-    private readonly IDapperUnitOfWork _uow;
-
-    public UserRepository(IDapperUnitOfWork uow)
+    public UserRepository(ApplicationDbContext context)
     {
-        _uow = uow;
-    }
-
-    internal static async Task<int> InsertAsync(
-        DbConnection connection,
-        DbTransaction tx,
-        User user,
-        string lastInsertIdQuery)
-    {
-        return await connection.ExecuteScalarAsync<int>(
-            @"INSERT INTO Users (FullName, Email, PasswordHash, Role, IsActive, Address)
-              VALUES (@FullName, @Email, @PasswordHash, @Role, @IsActive, @Address); "
-            + lastInsertIdQuery,
-            user, tx);
+        _context = context;
     }
 
     public async Task<List<User>> GetAllAsync()
     {
-        var connection = await _uow.GetConnectionAsync();
-
-        var users = await connection.QueryAsync<User>(SelectUser);
-
-        return users.ToList();
+        return await _context.Users
+            .AsNoTracking()
+            .OrderBy(user => user.UserId)
+            .ToListAsync();
     }
 
+    // Tracked: callers modify the user and save it.
     public async Task<User?> GetByIdAsync(int id)
     {
-        var connection = await _uow.GetConnectionAsync();
-
-        var user = await connection.QueryFirstOrDefaultAsync<User>(
-            SelectUser + " WHERE UserId = @id",
-            new { id });
-
-        return user == null ? null : _uow.Track(user);
+        return await _context.Users
+            .FirstOrDefaultAsync(user => user.UserId == id);
     }
 
     public async Task AddAsync(User user)
     {
-        _uow.Enqueue(async (connection, tx) =>
-        {
-            user.UserId = await InsertAsync(
-                connection, tx, user, _uow.LastInsertIdQuery);
-        });
-
-        await Task.CompletedTask;
+        await _context.Users.AddAsync(user);
     }
 
     public void Update(User user)
     {
-        _uow.Enqueue((connection, tx) => connection.ExecuteAsync(
-            @"UPDATE Users SET
-                FullName = @FullName,
-                Email = @Email,
-                PasswordHash = @PasswordHash,
-                Role = @Role,
-                IsActive = @IsActive,
-                Address = @Address
-              WHERE UserId = @UserId",
-            user, tx));
+        _context.MarkModifiedIfDetached(user);
     }
 
     public void Delete(User user)
     {
-        _uow.Enqueue((connection, tx) => connection.ExecuteAsync(
-            "DELETE FROM Users WHERE UserId = @UserId",
-            new { user.UserId }, tx));
+        _context.Users.Remove(user);
     }
 
     public async Task DeleteKeepingHistoryAsync(User user)
     {
-        await _uow.ExecuteInTransactionAsync(async (connection, tx) =>
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
         {
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync();
+
             // Snapshot who borrowed before the link to the user is cut.
-            await connection.ExecuteAsync(
-                @"UPDATE BorrowTransactions
-                  SET MemberName = @FullName, MemberEmail = @Email
-                  WHERE MemberId = @UserId",
-                new { user.FullName, user.Email, user.UserId }, tx);
+            await _context.BorrowTransactions
+                .Where(t => t.MemberId == user.UserId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(t => t.MemberName, user.FullName)
+                    .SetProperty(t => t.MemberEmail, user.Email));
 
             // The FK is ON DELETE SET NULL, so the history rows survive.
-            await connection.ExecuteAsync(
-                "DELETE FROM Users WHERE UserId = @UserId",
-                new { user.UserId }, tx);
+            await _context.Users
+                .Where(u => u.UserId == user.UserId)
+                .ExecuteDeleteAsync();
+
+            await transaction.CommitAsync();
         });
     }
 
@@ -108,23 +76,21 @@ public class UserRepository : IUserRepository
     public async Task<(int BorrowingCount, int ReturnCount)>
         GetTransactionCountsAsync(int userId)
     {
-        var connection = await _uow.GetConnectionAsync();
+        var counts = await _context.BorrowTransactions
+            .AsNoTracking()
+            .Where(t => t.MemberId == userId)
+            .GroupBy(t => t.ReturnDate == null)
+            .Select(g => new { NotReturned = g.Key, Count = g.Count() })
+            .ToListAsync();
 
-        var borrowingCount = await connection.ExecuteScalarAsync<int>(
-            @"SELECT COUNT(1) FROM BorrowTransactions
-              WHERE MemberId = @userId AND ReturnDate IS NULL",
-            new { userId });
+        var borrowing = counts.FirstOrDefault(c => c.NotReturned)?.Count ?? 0;
+        var returned = counts.FirstOrDefault(c => !c.NotReturned)?.Count ?? 0;
 
-        var returnCount = await connection.ExecuteScalarAsync<int>(
-            @"SELECT COUNT(1) FROM BorrowTransactions
-              WHERE MemberId = @userId AND ReturnDate IS NOT NULL",
-            new { userId });
-
-        return (borrowingCount, returnCount);
+        return (borrowing, returned);
     }
 
     public async Task SaveChangesAsync()
     {
-        await _uow.SaveChangesAsync();
+        await _context.SaveChangesAsync();
     }
 }

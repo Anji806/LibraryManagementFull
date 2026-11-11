@@ -6,6 +6,7 @@ using LibraryManagement.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -15,42 +16,70 @@ using Xunit;
 
 namespace LibraryManagement.Tests;
 
-public class SqliteConnectionFactory : IDbConnectionFactory
-{
-    private readonly string _connectionString;
-
-    public SqliteConnectionFactory(string connectionString)
-    {
-        _connectionString = connectionString;
-    }
-
-    public System.Data.Common.DbConnection CreateConnection()
-        => new SqliteConnection(_connectionString);
-
-    public string LastInsertIdQuery => "SELECT last_insert_rowid()";
-}
-
+/// <summary>
+/// Hosts the API against an in-memory SQLite database by default.
+/// Set TEST_DATABASE_URL to a PostgreSQL server (postgresql:// URL or Npgsql
+/// connection string, with rights to create databases) to run the same tests
+/// against real PostgreSQL: a throw-away database is created, migrated with
+/// the EF Core migrations, and dropped afterwards.
+/// </summary>
 public class LibraryApiFactory : WebApplicationFactory<Program>
 {
-    // A uniquely named shared-cache in-memory DB lets the EF context (used to
-    // seed data) and the Dapper repositories open their own connections to
-    // the same database. The open connection below keeps it alive; Foreign
-    // Keys=True enforces the same constraints that caused the original 500.
+    // A uniquely named shared-cache in-memory DB lets the test code and the
+    // API open their own connections to the same database. The open
+    // connection below keeps it alive; Foreign Keys=True enforces the same
+    // constraints that caused the original 500.
     private readonly string _connectionString =
         $"DataSource=file:{Guid.NewGuid():N}?mode=memory&cache=shared;Foreign Keys=True";
 
-    private readonly SqliteConnection _connection;
+    private readonly SqliteConnection? _connection;
+    private readonly string? _postgresAdminConnection;
+    private readonly string? _postgresConnection;
+    private readonly string? _postgresDatabase;
 
     public LibraryApiFactory()
     {
-        _connection = new SqliteConnection(_connectionString);
-        _connection.Open();
+        var postgresUrl =
+            Environment.GetEnvironmentVariable("TEST_DATABASE_URL");
+
+        if (!string.IsNullOrWhiteSpace(postgresUrl))
+        {
+            _postgresDatabase = $"lm_test_{Guid.NewGuid():N}";
+
+            _postgresAdminConnection = DatabaseConnection.Normalize(postgresUrl);
+
+            _postgresConnection = new NpgsqlConnectionStringBuilder(
+                _postgresAdminConnection)
+            {
+                Database = _postgresDatabase
+            }.ConnectionString;
+
+            using var admin = new NpgsqlConnection(_postgresAdminConnection);
+            admin.Open();
+            using var create = admin.CreateCommand();
+            create.CommandText = $"CREATE DATABASE \"{_postgresDatabase}\"";
+            create.ExecuteNonQuery();
+        }
+        else
+        {
+            _connection = new SqliteConnection(_connectionString);
+            _connection.Open();
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
-        builder.ConfigureLogging(logging => logging.ClearProviders());
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+
+            // TEST_LOGGING=1 prints server-side errors while debugging.
+            if (Environment.GetEnvironmentVariable("TEST_LOGGING") == "1")
+            {
+                logging.AddConsole();
+            }
+        });
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
@@ -59,7 +88,13 @@ public class LibraryApiFactory : WebApplicationFactory<Program>
                 ["Jwt:Key"] = "TEST_KEY_TEST_KEY_TEST_KEY_TEST_KEY_1234567890",
                 ["Jwt:Issuer"] = "TestIssuer",
                 ["Jwt:Audience"] = "TestAudience",
-                ["Jwt:ExpiryMinutes"] = "60"
+                ["Jwt:ExpiryMinutes"] = "60",
+                // Satisfies the startup configuration check; the SQLite
+                // registration below replaces the real provider.
+                ["ConnectionStrings:DefaultConnection"] =
+                    _postgresConnection ?? "Host=localhost;Database=unused",
+                // The test database is created below, not by the app.
+                ["Database:MigrateOnStartup"] = "false"
             });
         });
 
@@ -76,18 +111,29 @@ public class LibraryApiFactory : WebApplicationFactory<Program>
                 services.Remove(d);
             }
 
-            services.AddDbContext<ApplicationDbContext>(o =>
-                o.UseSqlite(_connectionString));
-
-            services.RemoveAll<IDbConnectionFactory>();
-            services.AddSingleton<IDbConnectionFactory>(
-                new SqliteConnectionFactory(_connectionString));
+            if (_postgresConnection is null)
+            {
+                services.AddDbContext<ApplicationDbContext>(o =>
+                    o.UseSqlite(_connectionString));
+            }
+            else
+            {
+                services.AddDbContext<ApplicationDbContext>(o =>
+                    o.UseNpgsql(_postgresConnection));
+            }
 
             using var provider = services.BuildServiceProvider();
             using var scope = provider.CreateScope();
-            scope.ServiceProvider
-                .GetRequiredService<ApplicationDbContext>()
-                .Database.EnsureCreated();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            if (_postgresConnection is null)
+            {
+                db.Database.EnsureCreated();
+            }
+            else
+            {
+                db.Database.Migrate();
+            }
         });
     }
 
@@ -95,9 +141,23 @@ public class LibraryApiFactory : WebApplicationFactory<Program>
     {
         base.Dispose(disposing);
 
-        if (disposing)
+        if (!disposing)
         {
-            _connection.Dispose();
+            return;
+        }
+
+        _connection?.Dispose();
+
+        if (_postgresAdminConnection is not null)
+        {
+            NpgsqlConnection.ClearAllPools();
+
+            using var admin = new NpgsqlConnection(_postgresAdminConnection);
+            admin.Open();
+            using var drop = admin.CreateCommand();
+            drop.CommandText =
+                $"DROP DATABASE IF EXISTS \"{_postgresDatabase}\" WITH (FORCE)";
+            drop.ExecuteNonQuery();
         }
     }
 }
@@ -220,6 +280,7 @@ public class DeleteBookTests : IClassFixture<LibraryApiFactory>
         Assert.Contains("borrowing history", body);
         Assert.DoesNotContain("FOREIGN KEY", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("SQLite", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Npgsql", body, StringComparison.OrdinalIgnoreCase);
         Assert.True(await BookExistsAsync(id));
     }
 

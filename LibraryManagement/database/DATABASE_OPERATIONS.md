@@ -1,3 +1,5 @@
+> **Obsolete.** The API now uses EF Core + PostgreSQL. See [POSTGRES_MIGRATION.md](POSTGRES_MIGRATION.md). This file documents the previous Dapper/SQLite setup.
+
 ﻿# Database migration and operations
 
 ## SQLite runtime

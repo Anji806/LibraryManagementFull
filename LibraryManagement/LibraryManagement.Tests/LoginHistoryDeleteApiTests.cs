@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using Dapper;
 using LibraryManagement.DTOs.Auth;
 using LibraryManagement.Data;
 using LibraryManagement.Models;
@@ -49,8 +48,7 @@ public sealed class LoginHistoryDeleteApiTests
         LoginHistory successful;
         using (var scope = factory.Services.CreateScope())
         {
-            var uow = scope.ServiceProvider.GetRequiredService<IDapperUnitOfWork>();
-            var repository = new LoginHistoryRepository(uow);
+            var repository = new LoginHistoryRepository(scope.ServiceProvider.GetRequiredService<ApplicationDbContext>());
             failed = new LoginHistory { UserId = registered.UserId, Username = email, LoginDateTime = DateTime.UtcNow, LoginStatus = "Failed", FailureReason = "Invalid credentials." };
             successful = new LoginHistory { UserId = failed.UserId, Username = email, LoginDateTime = DateTime.UtcNow, LoginStatus = "Success", SessionId = Guid.NewGuid().ToString("N"), SessionStatus = "Active" };
             await repository.InsertLoginHistoryAsync(failed);
@@ -72,9 +70,8 @@ public sealed class LoginHistoryDeleteApiTests
 
         using (var scope = factory.Services.CreateScope())
         {
-            var uow = scope.ServiceProvider.GetRequiredService<IDapperUnitOfWork>();
-            var connection = await uow.GetConnectionAsync();
-            Assert.Equal(1, await connection.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM LoginHistory WHERE LoginLogId = @id", new { id = failed.LoginLogId }));
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            Assert.Equal(1, await db.LoginHistory.CountAsync(x => x.LoginLogId == failed.LoginLogId));
         }
 
         using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, "/api/login-history")
@@ -89,7 +86,7 @@ public sealed class LoginHistoryDeleteApiTests
         LoginHistory activeSessionRecord;
         using (var scope = factory.Services.CreateScope())
         {
-            var repository = new LoginHistoryRepository(scope.ServiceProvider.GetRequiredService<IDapperUnitOfWork>());
+            var repository = new LoginHistoryRepository(scope.ServiceProvider.GetRequiredService<ApplicationDbContext>());
             activeSessionRecord = new LoginHistory
             {
                 UserId = registered.UserId,
@@ -112,10 +109,10 @@ public sealed class LoginHistoryDeleteApiTests
 
         using (var scope = factory.Services.CreateScope())
         {
-            var uow = scope.ServiceProvider.GetRequiredService<IDapperUnitOfWork>();
-            var connection = await uow.GetConnectionAsync();
-            Assert.Equal(0, await connection.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM LoginHistory WHERE LoginLogId IN @ids", new { ids = new[] { failed.LoginLogId, successful.LoginLogId, activeSessionRecord.LoginLogId } }));
-            Assert.Equal(1, await connection.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM Users WHERE Email = @email", new { email }));
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var deletedIds = new[] { failed.LoginLogId, successful.LoginLogId, activeSessionRecord.LoginLogId };
+            Assert.Equal(0, await db.LoginHistory.CountAsync(x => deletedIds.Contains(x.LoginLogId)));
+            Assert.Equal(1, await db.Users.CountAsync(x => x.Email == email));
         }
 
         // The API uses stateless JWT authentication; deleting a history row does not revoke the token.
