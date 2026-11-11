@@ -217,7 +217,7 @@ static System.Net.IPAddress NormalizeIp(
 
 var forwardedHeaders = new ForwardedHeadersOptions
 {
-    ForwardedHeaders =
+    ForwardedHeaders = 
         ForwardedHeaders.XForwardedFor |
         ForwardedHeaders.XForwardedProto,
     ForwardLimit = 1
