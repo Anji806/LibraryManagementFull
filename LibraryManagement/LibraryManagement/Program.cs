@@ -190,6 +190,42 @@ builder.Services.AddSwaggerGen(options =>
 // ==================================================
 
 var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider
+        .GetRequiredService<ApplicationDbContext>();
+
+    try
+    {
+        Console.WriteLine("===== DATABASE DIAGNOSTICS =====");
+
+        Console.WriteLine(
+            $"Environment: {app.Environment.EnvironmentName}");
+
+        Console.WriteLine(
+            $"Provider: {db.Database.ProviderName}");
+
+        var connection = db.Database.GetDbConnection();
+
+        Console.WriteLine(
+            $"Database: {connection.Database}");
+
+        Console.WriteLine(
+            $"Host: {connection.DataSource}");
+
+        var connected = await db.Database.CanConnectAsync();
+
+        Console.WriteLine(
+            $"Database Connected: {connected}");
+
+        Console.WriteLine("===== END DIAGNOSTICS =====");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("DATABASE ERROR:");
+        Console.WriteLine(ex.ToString());
+    }
+}
 
 var trustedProxyAddresses = builder.Configuration
     .GetSection("ForwardedHeaders:KnownProxies")
