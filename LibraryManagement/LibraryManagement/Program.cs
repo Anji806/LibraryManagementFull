@@ -114,6 +114,17 @@ builder.Services.AddSingleton<ILoginActivityEventBus, LoginActivityEventBus>();
 builder.Services.AddScoped<ILoginHistoryService, LoginHistoryService>();
 builder.Services.AddScoped<IBorrowService, BorrowService>();
 
+// Dictionary lookups for the book preview (external API, cached in memory).
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<IDictionaryService, DictionaryService>(client =>
+{
+    client.BaseAddress = new Uri(
+        builder.Configuration["Dictionary:BaseUrl"]
+        ?? "https://api.dictionaryapi.dev/api/v2/entries/en/");
+    client.Timeout = TimeSpan.FromSeconds(5);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("LibraryManagement/1.0");
+});
+
 // ==================================================
 // JWT TOKEN GENERATOR
 // ==================================================
@@ -345,7 +356,7 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
     }
     else
     {
-        await db.Database.EnsureCreatedAsync();
+        await SqliteDevSchema.EnsureLatestAsync(db);
     }
 }
 
