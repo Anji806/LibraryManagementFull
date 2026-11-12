@@ -8,4 +8,6 @@ public interface IAuthService
 
     Task<AuthResponseDto> LoginAsync(LoginDto dto);
 
+    Task<AuthResponseDto> CompleteLoginAsync(CompleteLoginDto dto);
+
 }

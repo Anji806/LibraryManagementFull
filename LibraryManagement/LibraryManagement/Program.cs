@@ -109,6 +109,7 @@ builder.Services.AddScoped<
 // ==================================================
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddSingleton<ILoginActivityEventBus, LoginActivityEventBus>();
 builder.Services.AddScoped<ILoginHistoryService, LoginHistoryService>();
 builder.Services.AddScoped<IBorrowService, BorrowService>();
@@ -135,6 +136,30 @@ builder.Services
             throw new InvalidOperationException(
                 "JWT Key is missing from appsettings.json.");
         }
+
+        // A valid signature is not enough: the session named by the jti claim
+        // must still be active (not revoked, not expired). This is what makes
+        // a revoked device lose access on its very next request.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal;
+                var sessionId = principal?.FindFirst(
+                    System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+
+                if (!int.TryParse(
+                        principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                        out var userId) ||
+                    string.IsNullOrWhiteSpace(sessionId) ||
+                    !await context.HttpContext.RequestServices
+                        .GetRequiredService<ISessionService>()
+                        .ValidateAsync(userId, sessionId))
+                {
+                    context.Fail("The session is no longer active.");
+                }
+            }
+        };
 
         options.TokenValidationParameters =
             new TokenValidationParameters

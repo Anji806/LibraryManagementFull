@@ -13,4 +13,11 @@ public class RegisterDto
     [Required]
     [MinLength(6)]
     public string Password { get; set; } = string.Empty;
+
+    // Persistent browser-profile id from the client (identifies a browser, not a person).
+    [MaxLength(64)]
+    public string? DeviceId { get; set; }
+
+    [MaxLength(100)]
+    public string? DeviceName { get; set; }
 }

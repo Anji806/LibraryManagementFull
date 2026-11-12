@@ -1,13 +1,14 @@
 import { useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
+import { DeviceLimitPanel } from '../../components/auth/DeviceLimitPanel.jsx'
 import { FormError } from '../../components/ui/PageParts.jsx'
 import { useSingleFlight } from '../../hooks/useSingleFlight.js'
 import { getApiErrorMessage } from '../../services/api.js'
 import { handleFormKeyDown } from '../../utils/keyboard.js'
 
 export function Login() {
-  const { login, isAuthenticated, isLoading, sessionExpired } = useAuth()
+  const { login, completeLogin, isAuthenticated, isLoading, sessionExpired } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -16,6 +17,10 @@ export function Login() {
   const notice = sessionExpired ? 'Your session has expired. Please sign in again.' : ''
   const [isSubmitting, setIsSubmitting] = useState(false)
   const emailRef = useRef(null)
+  // Set when the account is already signed in on two devices.
+  const [deviceLimit, setDeviceLimit] = useState(null)
+  const [limitError, setLimitError] = useState('')
+  const [revokingId, setRevokingId] = useState(null)
 
   const handleSubmit = useSingleFlight(async (event) => {
     event.preventDefault()
@@ -26,11 +31,46 @@ export function Login() {
       await login({ email, password })
       navigate(location.state?.from?.pathname || '/dashboard', { replace: true })
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Sign in failed.'))
+      const limit = requestError.response?.data
+      if (requestError.response?.status === 409 && limit?.code === 'DEVICE_LIMIT_REACHED') {
+        setLimitError('')
+        setDeviceLimit(limit)
+        setPassword('')
+      } else {
+        setError(getApiErrorMessage(requestError, 'Sign in failed.'))
+      }
     } finally {
       setIsSubmitting(false)
     }
   })
+
+  // Logs out the chosen device, then finishes this pending sign-in.
+  const handleSelectDevice = useSingleFlight(async (session) => {
+    setLimitError('')
+    setRevokingId(session.id)
+    try {
+      await completeLogin({
+        challengeToken: deviceLimit.challengeToken,
+        sessionToRevokeId: session.id,
+      })
+      navigate(location.state?.from?.pathname || '/dashboard', { replace: true })
+    } catch (requestError) {
+      if (requestError.response?.status === 400) {
+        // The challenge expired, was already used, or the device list changed.
+        setDeviceLimit(null)
+        setError(requestError.response?.data?.message || 'Please sign in again.')
+      } else {
+        setLimitError(getApiErrorMessage(requestError, 'The device could not be logged out.'))
+      }
+    } finally {
+      setRevokingId(null)
+    }
+  })
+
+  function handleCancelDeviceLimit() {
+    setDeviceLimit(null)
+    setLimitError('')
+  }
 
   // Esc dismisses the error first; pressing it again clears the form and returns to the email field.
   function handleKeyDown(event) {
@@ -67,6 +107,16 @@ export function Login() {
       </aside>
       <section className="auth-panel">
         <div className="auth-form-wrap">
+          {deviceLimit ? (
+            <DeviceLimitPanel
+              sessions={deviceLimit.sessions ?? []}
+              error={limitError}
+              busyId={revokingId}
+              onSelect={handleSelectDevice}
+              onCancel={handleCancelDeviceLimit}
+            />
+          ) : (
+          <>
           <p className="auth-eyebrow">Welcome back</p>
           <h2>Sign in to your account</h2>
           <p className="auth-intro">Use your library account credentials to continue.</p>
@@ -104,6 +154,8 @@ export function Login() {
           <p className="auth-switch">
             New to the library? <Link to="/register">Create an account</Link>
           </p>
+          </>
+          )}
         </div>
       </section>
     </main>
