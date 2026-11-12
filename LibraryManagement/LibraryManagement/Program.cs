@@ -47,7 +47,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:5173",
                 "http://localhost:3000",
                 "http://127.0.0.1:5173",
-                "https://astounding-quokka-a67be2.netlify.app")
+                "https://astounding-quokka-a67be2.netlify.app",
+                "https://librarymangementborrows.netlify.app")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
