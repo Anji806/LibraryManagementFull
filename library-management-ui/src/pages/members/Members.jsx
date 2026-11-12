@@ -13,7 +13,7 @@ export function Members() {
     return (
       <>
         <PageHeader title="My borrowing history" description="Everything you have borrowed and returned." />
-        <MemberTransactions memberId={user.userId} mode="history" />
+        <MemberTransactions memberId={user.userId} mode="history" previewable />
       </>
     )
   }

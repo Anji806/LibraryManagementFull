@@ -1,53 +1,51 @@
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 
 namespace LibraryManagement.Data;
 
-/// <summary>
-/// Used by the EF Core tools (dotnet ef migrations / database update).
-/// Reads DATABASE_URL (or ConnectionStrings:DefaultConnection) exactly like
-/// the application does. `migrations add` never connects, so a placeholder
-/// is used when nothing is configured; `database update` needs the real value.
-/// </summary>
 public class DesignTimeDbContextFactory
     : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
     public ApplicationDbContext CreateDbContext(string[] args)
     {
+        var environment =
+            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? "Development";
+
         var configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json", optional: true)
-            .AddJsonFile("appsettings.Development.json", optional: true)
+            .AddJsonFile($"appsettings.{environment}.json", optional: true)
             .AddEnvironmentVariables()
             .Build();
 
-        string connectionString;
+        var optionsBuilder =
+            new DbContextOptionsBuilder<ApplicationDbContext>();
 
-        try
+        if (environment.Equals(
+            "Production", StringComparison.OrdinalIgnoreCase))
         {
-            connectionString = DatabaseConnection.Resolve(configuration);
+            var connectionString =
+                DatabaseConnection.Resolve(configuration);
+
+            optionsBuilder.UseNpgsql(connectionString);
         }
-        catch (InvalidOperationException) when (
-            string.IsNullOrWhiteSpace(
-                Environment.GetEnvironmentVariable(
-                    DatabaseConnection.EnvironmentVariable)) &&
-            string.IsNullOrWhiteSpace(
-                configuration.GetConnectionString("DefaultConnection")))
+        else
         {
-            Console.Error.WriteLine(
-                "DATABASE_URL is not set; using a placeholder connection. " +
-                "This is fine for 'migrations add' but 'database update' " +
-                "will fail until DATABASE_URL is set.");
+            var connectionString =
+                configuration.GetConnectionString("DefaultConnection");
 
-            connectionString =
-                "Host=localhost;Database=librarymanagement_design;Username=postgres";
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "SQLite connection string is missing.");
+            }
+
+            optionsBuilder.UseSqlite(connectionString);
         }
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseNpgsql(connectionString)
-            .Options;
-
-        return new ApplicationDbContext(options);
+        return new ApplicationDbContext(optionsBuilder.Options);
     }
 }

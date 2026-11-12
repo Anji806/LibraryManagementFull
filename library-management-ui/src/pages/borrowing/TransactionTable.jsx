@@ -10,7 +10,7 @@ import { handleTableKeyDown } from '../../utils/keyboard.js'
 
 // Table of borrow transactions. When `onChanged` is given, active loans get a
 // Return action (the API restricts Members to their own transactions).
-export function TransactionTable({ transactions, onChanged, showMember = false }) {
+export function TransactionTable({ transactions, onChanged, showMember = false, onPreviewBook }) {
   const toast = useToast()
   const [pending, setPending] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -48,7 +48,19 @@ export function TransactionTable({ transactions, onChanged, showMember = false }
             {transactions.map((transaction) => (
               <tr key={transaction.transactionId}>
                 <td data-label="Book">
-                  <strong>{transaction.book?.title ?? `Book #${transaction.bookId}`}</strong>
+                  {onPreviewBook && transaction.book ? (
+                    <button
+                      className="book-title-button"
+                      type="button"
+                      onClick={() => onPreviewBook(transaction.book)}
+                      aria-label={`View book details for ${transaction.book.title}`}
+                    >
+                      <strong>{transaction.book.title}</strong>
+                      <span>View book details</span>
+                    </button>
+                  ) : (
+                    <strong>{transaction.book?.title ?? `Book #${transaction.bookId}`}</strong>
+                  )}
                   {transaction.book?.author?.authorName && (
                     <span className="cell-sub">{transaction.book.author.authorName}</span>
                   )}
