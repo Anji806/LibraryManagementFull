@@ -366,6 +366,25 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
     }
 }
 
+// Loans made before due dates existed get one (fills empty due dates only).
+{
+    var borrowing = app.Configuration
+        .GetSection(BorrowingOptions.SectionName).Get<BorrowingOptions>() ?? new BorrowingOptions();
+
+    if (borrowing.BackfillDueDates)
+    {
+        using var scope = app.Services.CreateScope();
+        var filled = await BorrowDueDateBackfill.RunAsync(
+            scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(),
+            scope.ServiceProvider.GetRequiredService<BorrowingPolicy>());
+
+        if (filled > 0)
+        {
+            app.Logger.LogInformation("Backfilled due dates for {Count} existing loan(s).", filled);
+        }
+    }
+}
+
 // ==================================================
 // SWAGGER
 // ==================================================

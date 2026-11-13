@@ -20,6 +20,10 @@ public class SessionService : ISessionService
     // writers itself, so an in-process gate per user is enough there.
     private static readonly ConcurrentDictionary<int, SemaphoreSlim> LocalGates = new();
 
+    // When this process last wrote LastActivityAt for a session. A burst of
+    // parallel requests from one browser then causes one write, not many.
+    private static readonly ConcurrentDictionary<int, DateTime> LastTouched = new();
+
     private readonly ApplicationDbContext _db;
     private readonly int _sessionMinutes;
 
@@ -192,11 +196,21 @@ public class SessionService : ISessionService
             return false;
         }
 
-        if (now - session.LastActivityAt >= ActivityWriteInterval)
+        if (now - session.LastActivityAt >= ActivityWriteInterval &&
+            ShouldTouch(session.Id, now))
         {
-            await _db.UserSessions
-                .Where(s => s.Id == session.Id)
-                .ExecuteUpdateAsync(set => set.SetProperty(s => s.LastActivityAt, now));
+            // Best effort: "last active" is informational, so a busy or locked
+            // database must never fail the request or the sign-in check.
+            try
+            {
+                await _db.UserSessions
+                    .Where(s => s.Id == session.Id)
+                    .ExecuteUpdateAsync(set => set.SetProperty(s => s.LastActivityAt, now));
+            }
+            catch (Exception ex) when (ex is DbUpdateException or System.Data.Common.DbException)
+            {
+                LastTouched.TryRemove(session.Id, out _);
+            }
         }
 
         return true;
@@ -231,6 +245,24 @@ public class SessionService : ISessionService
     }
 
     // ------------------------------------------------------------------
+
+    private static bool ShouldTouch(int sessionId, DateTime now)
+    {
+        if (LastTouched.Count > 10_000)
+        {
+            LastTouched.Clear(); // bounded memory; at worst one extra write per session
+        }
+
+        var last = LastTouched.GetOrAdd(sessionId, DateTime.MinValue);
+
+        if (now - last < ActivityWriteInterval)
+        {
+            return false;
+        }
+
+        // Only one of several concurrent requests gets to write.
+        return LastTouched.TryUpdate(sessionId, now, last);
+    }
 
     private IQueryable<UserSession> ActiveSessions(int userId, DateTime now)
         => _db.UserSessions.Where(s =>

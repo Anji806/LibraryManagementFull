@@ -21,8 +21,9 @@ function dueNote(transaction) {
 }
 
 function fineNote(transaction) {
-  const outstanding = Number(transaction.outstandingFine) || 0
-  return outstanding > 0 ? 'unpaid' : 'paid'
+  if (!(transaction.currentFine > 0)) return ''
+  if (transaction.isOverdue) return 'so far'
+  return Number(transaction.outstandingFine) > 0 ? 'unpaid' : 'paid'
 }
 
 // Table of borrow transactions. When `onChanged` is given, active loans get a
@@ -108,16 +109,11 @@ export function TransactionTable({ transactions, onChanged, showMember = false, 
                   <StatusBadge status={transaction.displayStatus ?? transaction.status} />
                 </td>
                 <td data-label="Fine">
-                  {transaction.currentFine > 0 ? (
-                    <>
-                      <span className={transaction.isOverdue ? 'cell-overdue' : undefined}>
-                        {formatCurrency(transaction.currentFine)}
-                      </span>
-                      <span className="cell-sub">
-                        {transaction.isOverdue ? 'so far' : fineNote(transaction)}
-                      </span>
-                    </>
-                  ) : '—'}
+                  {/* Always an amount, including ₹0.00; calculated by the API. */}
+                  <span className={transaction.isOverdue && transaction.currentFine > 0 ? 'cell-overdue' : undefined}>
+                    {formatCurrency(transaction.currentFine ?? transaction.fineAmount)}
+                  </span>
+                  {fineNote(transaction) && <span className="cell-sub">{fineNote(transaction)}</span>}
                 </td>
                 {onChanged && (
                   <td className="row-actions">
@@ -142,7 +138,7 @@ export function TransactionTable({ transactions, onChanged, showMember = false, 
           title="Return this book?"
           message={
             `Mark "${pending.book?.title ?? 'this book'}" as returned. This will restore one copy to available inventory.` +
-            (pending.isOverdue
+            (pending.isOverdue && pending.currentFine > 0
               ? ` It is ${pending.overdueDays} day${pending.overdueDays === 1 ? '' : 's'} overdue, so a late fine of ${formatCurrency(pending.currentFine)} will be recorded.`
               : '')
           }

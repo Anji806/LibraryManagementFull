@@ -22,6 +22,21 @@ public class BorrowingOptions
     /// the due date is on time).
     /// </summary>
     public string TimeZoneId { get; set; } = "Asia/Kolkata";
+
+    /// <summary>
+    /// Go-live date of fines (library time zone, yyyy-MM-dd). Days before it
+    /// are never charged, so loans that were already overdue when fines were
+    /// introduced do not receive a surprise back-dated fine: they show as
+    /// overdue, and the fine only grows from the days after this date.
+    /// Leave empty to charge from the due date.
+    /// </summary>
+    public DateOnly? FinesStartDate { get; set; }
+
+    /// <summary>
+    /// Fills in a due date for loans that were made before due dates existed.
+    /// Safe to leave on: it only touches loans without a due date.
+    /// </summary>
+    public bool BackfillDueDates { get; set; } = true;
 }
 
 /// <summary>What the rules say about one loan at one moment.</summary>
@@ -73,8 +88,24 @@ public class BorrowingPolicy
     public int OverdueDays(DateTime dueUtc, DateTime endUtc)
         => Math.Max(0, LocalDate(endUtc).DayNumber - LocalDate(dueUtc).DayNumber);
 
+    /// <summary>
+    /// Overdue days that are charged: counted from the due day, but never
+    /// before <see cref="BorrowingOptions.FinesStartDate"/>.
+    /// </summary>
+    public int FineDays(DateTime dueUtc, DateTime endUtc)
+    {
+        var from = LocalDate(dueUtc).DayNumber;
+
+        if (_options.FinesStartDate is { } start)
+        {
+            from = Math.Max(from, start.DayNumber);
+        }
+
+        return Math.Max(0, LocalDate(endUtc).DayNumber - from);
+    }
+
     public decimal CalculateFine(DateTime dueUtc, DateTime endUtc)
-        => OverdueDays(dueUtc, endUtc) * _options.FinePerDay;
+        => FineDays(dueUtc, endUtc) * _options.FinePerDay;
 
     /// <summary>
     /// Evaluates a loan. A returned loan uses its stored return date and fine;
@@ -103,7 +134,7 @@ public class BorrowingPolicy
         if (overdue > 0)
         {
             return new BorrowingStatus(
-                true, overdue, null, overdue * _options.FinePerDay, "Overdue");
+                true, overdue, null, CalculateFine(dueDate, nowUtc), "Overdue");
         }
 
         var remaining = LocalDate(dueDate).DayNumber - LocalDate(nowUtc).DayNumber;
