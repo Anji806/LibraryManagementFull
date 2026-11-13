@@ -19,6 +19,34 @@ public static class SqliteDevSchema
         {
             await db.Database.ExecuteSqlRawAsync(statement);
         }
+
+        await AddMissingColumnsAsync(db, "BorrowTransactions", BorrowColumns);
+    }
+
+    // Columns added to existing tables after the file was first created.
+    // Existing rows keep their data: DueDate stays NULL, fines default to 0.
+    private static readonly (string Name, string Definition)[] BorrowColumns =
+    [
+        ("DueDate", "TEXT NULL"),
+        ("FineAmount", "TEXT NOT NULL DEFAULT '0.0'"),
+        ("FinePaid", "TEXT NOT NULL DEFAULT '0.0'")
+    ];
+
+    private static async Task AddMissingColumnsAsync(
+        ApplicationDbContext db,
+        string table,
+        (string Name, string Definition)[] columns)
+    {
+        var existing = (await db.Database
+                .SqlQueryRaw<string>($"SELECT name AS Value FROM pragma_table_info('{table}')")
+                .ToListAsync())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (name, definition) in columns.Where(c => !existing.Contains(c.Name)))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                $"ALTER TABLE \"{table}\" ADD COLUMN \"{name}\" {definition}");
+        }
     }
 
     private static readonly string[] SessionTables =

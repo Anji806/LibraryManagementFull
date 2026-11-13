@@ -4,6 +4,7 @@ using LibraryManagement.Exceptions;
 using LibraryManagement.Helpers;
 using LibraryManagement.Repositories.Implementations;
 using LibraryManagement.Repositories.Interfaces;
+using LibraryManagement.Services;
 using LibraryManagement.Services.Implementations;
 using LibraryManagement.Services.Interfaces;
 using LibraryManagement.Realtime;
@@ -113,6 +114,11 @@ builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddSingleton<ILoginActivityEventBus, LoginActivityEventBus>();
 builder.Services.AddScoped<ILoginHistoryService, LoginHistoryService>();
 builder.Services.AddScoped<IBorrowService, BorrowService>();
+
+// Borrowing period, fine rate and time zone (section "Borrowing" in configuration).
+builder.Services.Configure<BorrowingOptions>(
+    builder.Configuration.GetSection(BorrowingOptions.SectionName));
+builder.Services.AddSingleton<BorrowingPolicy>();
 
 // Dictionary lookups for the book preview (external API, cached in memory).
 builder.Services.AddMemoryCache();

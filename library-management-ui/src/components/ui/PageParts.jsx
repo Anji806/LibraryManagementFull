@@ -70,7 +70,14 @@ export function ResourceView({ resource, isEmpty, empty, children }) {
   return children
 }
 
+const STATUS_TONES = {
+  Returned: 'neutral',
+  Overdue: 'danger',
+  'Due Soon': 'warning',
+  'Fine Pending': 'warning',
+}
+
 export function StatusBadge({ status }) {
-  const tone = status === 'Returned' ? 'neutral' : 'active'
+  const tone = STATUS_TONES[status] ?? 'active'
   return <span className={`badge badge-${tone}`}>{status}</span>
 }

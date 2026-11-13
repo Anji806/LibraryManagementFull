@@ -14,6 +14,15 @@ public class BorrowTransactionConfiguration
 
         builder.Property(x => x.Status).IsRequired();
 
+        // Rupees with paise; decimal avoids floating-point rounding errors.
+        builder.Property(x => x.FineAmount)
+            .HasPrecision(10, 2)
+            .HasDefaultValue(0m);
+
+        builder.Property(x => x.FinePaid)
+            .HasPrecision(10, 2)
+            .HasDefaultValue(0m);
+
         builder.HasOne(x => x.Book)
             .WithMany(x => x.BorrowTransactions)
             .HasForeignKey(x => x.BookId)

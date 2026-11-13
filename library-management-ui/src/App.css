@@ -1029,6 +1029,17 @@ label.field {
   border: 1px solid var(--color-warning-border);
 }
 
+.badge-danger {
+  color: var(--color-error);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+}
+
+.cell-overdue {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
 .badge-neutral {
   color: var(--color-neutral);
   background: var(--color-neutral-bg);

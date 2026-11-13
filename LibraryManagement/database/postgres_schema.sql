@@ -309,3 +309,35 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113045150_AddBorrowDueDateAndFines') THEN
+    ALTER TABLE "BorrowTransactions" ADD "DueDate" timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113045150_AddBorrowDueDateAndFines') THEN
+    ALTER TABLE "BorrowTransactions" ADD "FineAmount" numeric(10,2) NOT NULL DEFAULT 0.0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113045150_AddBorrowDueDateAndFines') THEN
+    ALTER TABLE "BorrowTransactions" ADD "FinePaid" numeric(10,2) NOT NULL DEFAULT 0.0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261113045150_AddBorrowDueDateAndFines') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261113045150_AddBorrowDueDateAndFines', '10.0.14');
+    END IF;
+END $EF$;
+COMMIT;
+

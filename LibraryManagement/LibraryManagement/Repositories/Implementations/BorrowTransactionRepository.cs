@@ -1,6 +1,7 @@
 using LibraryManagement.Data;
 using LibraryManagement.Models;
 using LibraryManagement.Repositories.Interfaces;
+using LibraryManagement.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagement.Repositories.Implementations;
@@ -9,11 +10,14 @@ public class BorrowTransactionRepository
     : IBorrowTransactionRepository
 {
     private readonly ApplicationDbContext _context;
+    private readonly BorrowingPolicy _policy;
 
     public BorrowTransactionRepository(
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        BorrowingPolicy policy)
     {
         _context = context;
+        _policy = policy;
     }
 
     // BorrowTransaction -> Book -> Author
@@ -33,6 +37,14 @@ public class BorrowTransactionRepository
         await _context.PopulateCategoryNamesAsync(
             transactions.Select(t => t.Book).ToList());
 
+        // Overdue status and fines are always calculated here, never trusted
+        // from the client or from a stale stored value.
+        var now = DateTime.UtcNow;
+        foreach (var transaction in transactions)
+        {
+            _policy.Apply(transaction, now);
+        }
+
         return transactions;
     }
 
@@ -47,6 +59,7 @@ public class BorrowTransactionRepository
         if (transaction != null)
         {
             await _context.PopulateCategoryNamesAsync([transaction.Book]);
+            _policy.Apply(transaction, DateTime.UtcNow);
         }
 
         return transaction;

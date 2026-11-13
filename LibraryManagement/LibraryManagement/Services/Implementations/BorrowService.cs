@@ -2,6 +2,7 @@
 using LibraryManagement.Models;
 using LibraryManagement.Repositories.Interfaces;
 using LibraryManagement.Services.Interfaces;
+using LibraryManagement.Services;
 
 namespace LibraryManagement.Services.Implementations;
 
@@ -11,12 +12,15 @@ public class BorrowService : IBorrowService
     private readonly IUserRepository _userRepository;
     private readonly IBorrowTransactionRepository
         _borrowRepository;
+    private readonly BorrowingPolicy _policy;
 
     public BorrowService(
         IBookRepository bookRepository,
         IUserRepository userRepository,
-        IBorrowTransactionRepository borrowRepository)
+        IBorrowTransactionRepository borrowRepository,
+        BorrowingPolicy policy)
     {
+        _policy = policy;
         _bookRepository = bookRepository;
         _userRepository = userRepository;
         _borrowRepository = borrowRepository;
@@ -84,11 +88,15 @@ public class BorrowService : IBorrowService
         _bookRepository.Update(book);
 
         // 6. Create transaction
+        // Dates are set here, on the server; the client cannot supply them.
+        var borrowedAt = DateTime.UtcNow;
+
         var transaction = new BorrowTransaction
         {
             BookId = bookId,
             MemberId = memberId,
-            BorrowDate = DateTime.UtcNow,
+            BorrowDate = borrowedAt,
+            DueDate = _policy.ComputeDueDate(borrowedAt),
             ReturnDate = null,
             Status = "Borrowed"
         };
@@ -97,6 +105,8 @@ public class BorrowService : IBorrowService
 
         // 7. Save changes
         await _borrowRepository.SaveChangesAsync();
+
+        _policy.Apply(transaction, DateTime.UtcNow);
 
         return transaction;
     }
@@ -139,6 +149,12 @@ public class BorrowService : IBorrowService
         transaction.ReturnDate = DateTime.UtcNow;
         transaction.Status = "Returned";
 
+        // Final fine, from the actual return date. Loans that predate due
+        // dates have no deadline and therefore no fine.
+        transaction.FineAmount = transaction.DueDate is { } dueDate
+            ? _policy.CalculateFine(dueDate, transaction.ReturnDate.Value)
+            : 0m;
+
         // 5. Increase available copies
         if (book.AvailableCopies < book.TotalCopies)
         {
@@ -150,6 +166,8 @@ public class BorrowService : IBorrowService
 
         // 6. Save
         await _borrowRepository.SaveChangesAsync();
+
+        _policy.Apply(transaction, DateTime.UtcNow);
 
         return transaction;
     }

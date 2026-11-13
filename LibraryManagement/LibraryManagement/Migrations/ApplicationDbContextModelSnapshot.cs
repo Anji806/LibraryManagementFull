@@ -130,6 +130,21 @@ namespace LibraryManagement.Migrations
                     b.Property<DateTime>("BorrowDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("FineAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<decimal>("FinePaid")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasDefaultValue(0m);
+
                     b.Property<string>("MemberEmail")
                         .HasColumnType("text");
 

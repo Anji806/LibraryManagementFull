@@ -54,4 +54,50 @@ public class SqliteDevSchemaTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public async Task OldBorrowTransactionsTable_GetsDueDateAndFineColumns_KeepingItsRows()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"lm-dev-{Guid.NewGuid():N}.db");
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlite($"Data Source={path};Foreign Keys=True;Pooling=False")
+            .Options;
+
+        try
+        {
+            await using (var old = new ApplicationDbContext(options))
+            {
+                await old.Database.EnsureCreatedAsync();
+                old.BorrowTransactions.Add(new BorrowTransaction
+                {
+                    BorrowDate = DateTime.UtcNow.AddDays(-30),
+                    Status = "Borrowed",
+                    Book = new Book
+                    {
+                        Title = "Old", ISBN = "old-1", TotalCopies = 1, AvailableCopies = 0, PublishedYear = 2000,
+                        Author = new Author { AuthorName = "A" }, Category = new Category { CategoryName = "C" }
+                    }
+                });
+                await old.SaveChangesAsync();
+
+                foreach (var column in new[] { "DueDate", "FineAmount", "FinePaid" })
+                    await old.Database.ExecuteSqlRawAsync($"ALTER TABLE \"BorrowTransactions\" DROP COLUMN \"{column}\"");
+            }
+
+            await using var db = new ApplicationDbContext(options);
+            await SqliteDevSchema.EnsureLatestAsync(db);
+            await SqliteDevSchema.EnsureLatestAsync(db); // idempotent
+
+            var row = await db.BorrowTransactions.SingleAsync();
+            Assert.Equal("Borrowed", row.Status);
+            Assert.Null(row.DueDate);
+            Assert.Equal(0m, row.FineAmount);
+            Assert.Equal(0m, row.FinePaid);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+    }
 }
