@@ -4,6 +4,7 @@ using LibraryManagement.Exceptions;
 using LibraryManagement.Helpers;
 using LibraryManagement.Repositories.Implementations;
 using LibraryManagement.Repositories.Interfaces;
+using LibraryManagement.Services;
 using LibraryManagement.Services.Implementations;
 using LibraryManagement.Services.Interfaces;
 using LibraryManagement.Realtime;
@@ -11,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
@@ -26,7 +28,7 @@ builder.Logging.AddConsole();
 // ==================================================
 // CONTROLLERS
 // ==================================================
-
+//controllers
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -47,7 +49,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:5173",
                 "http://localhost:3000",
                 "http://127.0.0.1:5173",
-                "https://astounding-quokka-a67be2.netlify.app")
+                "https://astounding-quokka-a67be2.netlify.app",
+                "https://librarymangementborrows.netlify.app")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -108,9 +111,65 @@ builder.Services.AddScoped<
 // ==================================================
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddSingleton<ILoginActivityEventBus, LoginActivityEventBus>();
 builder.Services.AddScoped<ILoginHistoryService, LoginHistoryService>();
 builder.Services.AddScoped<IBorrowService, BorrowService>();
+
+// Borrowing period, fine rate and time zone (section "Borrowing" in configuration).
+builder.Services.Configure<BorrowingOptions>(
+    builder.Configuration.GetSection(BorrowingOptions.SectionName));
+builder.Services.AddSingleton<BorrowingPolicy>();
+
+// Forgot / reset password (section "PasswordReset").
+builder.Services.Configure<PasswordResetOptions>(
+    builder.Configuration.GetSection(PasswordResetOptions.SectionName));
+builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
+
+// Per-IP limit for the forgot/reset endpoints. Read from configuration when the
+// limiter is first built, so tests and deployments can change it.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"statusCode\":429,\"message\":\"Too many requests. Please wait a while and try again.\"}",
+            token);
+    };
+});
+builder.Services.AddOptions<Microsoft.AspNetCore.RateLimiting.RateLimiterOptions>()
+    .Configure<IOptions<PasswordResetOptions>>((options, reset) =>
+    {
+        var limits = reset.Value;
+
+        options.AddPolicy("password-reset", httpContext =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = Math.Max(1, limits.RequestsPerWindow),
+                    Window = TimeSpan.FromMinutes(Math.Max(1, limits.RateLimitWindowMinutes)),
+                    QueueLimit = 0
+                }));
+    });
+
+// Gmail SMTP email (section "Email"; credentials only from user secrets / environment).
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection(EmailSettings.SectionName));
+builder.Services.AddScoped<IEmailService, EmailService>();
+
+// Dictionary lookups for the book preview (external API, cached in memory).
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<IDictionaryService, DictionaryService>(client =>
+{
+    client.BaseAddress = new Uri(
+        builder.Configuration["Dictionary:BaseUrl"]
+        ?? "https://api.dictionaryapi.dev/api/v2/entries/en/");
+    client.Timeout = TimeSpan.FromSeconds(5);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("LibraryManagement/1.0");
+});
 
 // ==================================================
 // JWT TOKEN GENERATOR
@@ -134,6 +193,30 @@ builder.Services
             throw new InvalidOperationException(
                 "JWT Key is missing from appsettings.json.");
         }
+
+        // A valid signature is not enough: the session named by the jti claim
+        // must still be active (not revoked, not expired). This is what makes
+        // a revoked device lose access on its very next request.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal;
+                var sessionId = principal?.FindFirst(
+                    System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+
+                if (!int.TryParse(
+                        principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                        out var userId) ||
+                    string.IsNullOrWhiteSpace(sessionId) ||
+                    !await context.HttpContext.RequestServices
+                        .GetRequiredService<ISessionService>()
+                        .ValidateAsync(userId, sessionId))
+                {
+                    context.Fail("The session is no longer active.");
+                }
+            }
+        };
 
         options.TokenValidationParameters =
             new TokenValidationParameters
@@ -190,6 +273,42 @@ builder.Services.AddSwaggerGen(options =>
 // ==================================================
 
 var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider
+        .GetRequiredService<ApplicationDbContext>();
+
+    try
+    {
+        Console.WriteLine("===== DATABASE DIAGNOSTICS =====");
+
+        Console.WriteLine(
+            $"Environment: {app.Environment.EnvironmentName}");
+
+        Console.WriteLine(
+            $"Provider: {db.Database.ProviderName}");
+
+        var connection = db.Database.GetDbConnection();
+
+        Console.WriteLine(
+            $"Database: {connection.Database}");
+
+        Console.WriteLine(
+            $"Host: {connection.DataSource}");
+
+        var connected = await db.Database.CanConnectAsync();
+
+        Console.WriteLine(
+            $"Database Connected: {connected}");
+
+        Console.WriteLine("===== END DIAGNOSTICS =====");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("DATABASE ERROR:");
+        Console.WriteLine(ex.ToString());
+    }
+}
 
 var trustedProxyAddresses = builder.Configuration
     .GetSection("ForwardedHeaders:KnownProxies")
@@ -217,7 +336,7 @@ static System.Net.IPAddress NormalizeIp(
 
 var forwardedHeaders = new ForwardedHeadersOptions
 {
-    ForwardedHeaders =
+    ForwardedHeaders = 
         ForwardedHeaders.XForwardedFor |
         ForwardedHeaders.XForwardedProto,
     ForwardLimit = 1
@@ -283,7 +402,26 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
     }
     else
     {
-        await db.Database.EnsureCreatedAsync();
+        await SqliteDevSchema.EnsureLatestAsync(db);
+    }
+}
+
+// Loans made before due dates existed get one (fills empty due dates only).
+{
+    var borrowing = app.Configuration
+        .GetSection(BorrowingOptions.SectionName).Get<BorrowingOptions>() ?? new BorrowingOptions();
+
+    if (borrowing.BackfillDueDates)
+    {
+        using var scope = app.Services.CreateScope();
+        var filled = await BorrowDueDateBackfill.RunAsync(
+            scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(),
+            scope.ServiceProvider.GetRequiredService<BorrowingPolicy>());
+
+        if (filled > 0)
+        {
+            app.Logger.LogInformation("Backfilled due dates for {Count} existing loan(s).", filled);
+        }
     }
 }
 
@@ -309,6 +447,7 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 
 // ==================================================
 // GLOBAL EXCEPTION HANDLER

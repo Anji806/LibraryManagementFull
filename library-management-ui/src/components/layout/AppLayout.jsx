@@ -81,6 +81,15 @@ function IconClock() {
   )
 }
 
+function IconMail() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <polyline points="3 7 12 13 21 7" />
+    </svg>
+  )
+}
+
 function IconUsers() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -155,6 +164,7 @@ const navigation = [
   },
   { label: 'Users', path: '/users', icon: <IconUsers />, permission: PERMISSIONS.MANAGE_USERS },
   { label: 'Login history', path: '/admin/login-history', icon: <IconClock />, permission: PERMISSIONS.READ_LOGIN_HISTORY },
+  { label: 'Email test', path: '/admin/email-test', icon: <IconMail />, permission: PERMISSIONS.SEND_TEST_EMAIL },
 ]
 
 // Page title derived from the current pathname

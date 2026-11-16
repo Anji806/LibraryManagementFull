@@ -19,14 +19,17 @@ public class AuthService : IAuthService
     private readonly ILoginHistoryService _loginHistory;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuthService> _logger;
+    private readonly ISessionService _sessions;
 
     public AuthService(
         IAuthRepository authRepository,
         JwtTokenGenerator jwtTokenGenerator,
         ILoginHistoryService loginHistory,
         IHttpContextAccessor httpContextAccessor,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        ISessionService sessions)
     {
+        _sessions = sessions;
         _authRepository = authRepository;
         _jwtTokenGenerator = jwtTokenGenerator;
         _passwordHasher = new PasswordHasher<User>();
@@ -63,8 +66,12 @@ public class AuthService : IAuthService
         await _authRepository.AddAsync(user);
         await _authRepository.SaveChangesAsync();
 
+        // A new account has no sessions, so this never hits the device limit.
+        var started = await _sessions.StartAsync(
+            user.UserId, BuildDevice(dto.DeviceId, dto.DeviceName));
+
         var token =
-            _jwtTokenGenerator.GenerateToken(user);
+            _jwtTokenGenerator.GenerateToken(user, started.Session!.SessionId);
 
         return new AuthResponseDto
         {
@@ -110,12 +117,44 @@ public class AuthService : IAuthService
                 "Invalid email or password.");
         }
 
-        var sessionId = Guid.NewGuid().ToString("N");
-        var expiryMinutes = int.TryParse(_httpContextAccessor.HttpContext?.RequestServices.GetService<IConfiguration>()?["Jwt:ExpiryMinutes"], out var configuredExpiry) ? configuredExpiry : 60;
-        var sessionExpiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes);
-        var token = _jwtTokenGenerator.GenerateToken(user, sessionId);
+        // Credentials are verified; now apply the two-device limit.
+        var started = await _sessions.StartAsync(
+            user.UserId, BuildDevice(dto.DeviceId, dto.DeviceName));
 
-        await RecordLoginAttemptAsync(dto.Email, user.UserId, "Success", null, sessionId, sessionExpiresAt);
+        await RecordLogoutsAsync(started.ReplacedSessionIds);
+
+        if (started.Limit is not null)
+        {
+            return new AuthResponseDto { DeviceLimit = started.Limit };
+        }
+
+        return await SignInAsync(user, started.Session!, dto.Email);
+    }
+
+    public async Task<AuthResponseDto> CompleteLoginAsync(CompleteLoginDto dto)
+    {
+        var result = await _sessions.CompleteAsync(
+            dto.ChallengeToken, dto.SessionToRevokeId!.Value);
+
+        await RecordLogoutsAsync([result.RevokedSessionId]);
+
+        var user = await _authRepository.GetByIdAsync(result.UserId);
+
+        if (user == null || !user.IsActive)
+        {
+            await _sessions.RevokeAsync(result.UserId, result.Session.SessionId);
+            throw new BusinessRuleException("This account is inactive.");
+        }
+
+        return await SignInAsync(user, result.Session, user.Email);
+    }
+
+    private async Task<AuthResponseDto> SignInAsync(User user, UserSession session, string username)
+    {
+        var token = _jwtTokenGenerator.GenerateToken(user, session.SessionId);
+
+        await RecordLoginAttemptAsync(
+            username, user.UserId, "Success", null, session.SessionId, session.ExpiresAt);
 
         return new AuthResponseDto
         {
@@ -125,6 +164,35 @@ public class AuthService : IAuthService
             Email = user.Email,
             Role = user.Role
         };
+    }
+
+    private async Task RecordLogoutsAsync(IEnumerable<string> sessionIds)
+    {
+        foreach (var sessionId in sessionIds)
+        {
+            try { await _loginHistory.RecordLogoutAsync(sessionId, DateTime.UtcNow); }
+            catch (Exception exception)
+            {
+                // The audit trail must not change the authentication result.
+                _logger.LogError(exception, "Unable to write logout audit record.");
+            }
+        }
+    }
+
+    private DeviceInfo BuildDevice(string? deviceId, string? deviceName)
+    {
+        var context = _httpContextAccessor.HttpContext;
+        var agent = context?.Request.Headers.UserAgent.ToString();
+        var browser = DetectBrowser(agent);
+        var os = DetectOperatingSystem(agent);
+
+        return new DeviceInfo(
+            Limit(deviceId?.Trim(), 64),
+            Limit(deviceName?.Trim(), 100)
+                ?? $"{browser ?? "Unknown browser"} on {os ?? "unknown system"}",
+            browser,
+            os,
+            Limit(GetClientIp(context), 45));
     }
 
     private async Task RecordLoginAttemptAsync(string username, int? userId, string status, string? reason, string? sessionId = null, DateTime? sessionExpiresAt = null)

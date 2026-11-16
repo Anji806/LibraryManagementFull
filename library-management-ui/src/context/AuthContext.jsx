@@ -32,6 +32,11 @@ export function AuthProvider({ children }) {
     [acceptAuthResponse],
   )
 
+  const completeLogin = useCallback(
+    async (challenge) => acceptAuthResponse(await authService.completeLogin(challenge)),
+    [acceptAuthResponse],
+  )
+
   const register = useCallback(
     async (details) => acceptAuthResponse(await authService.register(details)),
     [acceptAuthResponse],
@@ -66,10 +71,11 @@ export function AuthProvider({ children }) {
       initializationError,
       sessionExpired,
       login,
+      completeLogin,
       register,
       logout,
     }),
-    [initializationError, isLoading, login, logout, register, session, sessionExpired],
+    [initializationError, isLoading, login, completeLogin, logout, register, session, sessionExpired],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

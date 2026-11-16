@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getBookPreviewContent } from '../../data/bookPreviewContent.js'
+import { useWordSelection } from '../../hooks/useWordSelection.js'
+import { DictionaryPopup } from './DictionaryPopup.jsx'
 
 function getBorrowStatus(book) {
   if (book.availableCopies > 0) return { label: 'Available', className: 'badge-active' }
@@ -27,6 +29,8 @@ export function BookPreview({ book, borrowing = false, canBorrow = true, onBorro
   const [currentPage, setCurrentPage] = useState(0)
   const readerRef = useRef(null)
   const pageRefs = useRef([])
+  // Selecting a single word in the reading area opens the dictionary popup.
+  const { selection, clear: closeDictionary } = useWordSelection(readerRef)
   const introduction = researchedContent?.introduction || firstBookText(book, ['previewIntroduction', 'PreviewIntroduction', 'introduction', 'Introduction'])
   const previewTheme = researchedContent?.theme || firstBookText(book, ['previewTheme', 'PreviewTheme', 'mainTheme', 'MainTheme', 'theme', 'Theme'])
   const previewAbstract = researchedContent?.abstract || firstBookText(book, ['previewAbstract', 'PreviewAbstract', 'abstract', 'Abstract', 'storyOverview', 'StoryOverview', 'description', 'Description', 'summary', 'Summary'])
@@ -138,6 +142,15 @@ export function BookPreview({ book, borrowing = false, canBorrow = true, onBorro
           </article>
         ))}
       </div>
+
+      {selection && (
+        <DictionaryPopup
+          key={`${selection.word}-${selection.rect.left}-${selection.rect.top}`}
+          word={selection.word}
+          anchor={selection.rect}
+          onClose={closeDictionary}
+        />
+      )}
 
       <div className="pdf-footer">
         <div className="pdf-page-dots" aria-label="Select a preview page">

@@ -24,6 +24,12 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<LoginHistory> LoginHistory => Set<LoginHistory>();
 
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
+
+    public DbSet<PendingLogin> PendingLogins => Set<PendingLogin>();
+
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

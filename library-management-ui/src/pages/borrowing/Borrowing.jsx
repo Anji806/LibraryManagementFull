@@ -94,7 +94,7 @@ export function Borrowing({ allowBorrow = true }) {
           description="Books you currently have on loan."
           actions={<Link className="primary-button" to="/books">Browse catalog</Link>}
         />
-        <MemberTransactions memberId={user.userId} mode="current" showReturn />
+        <MemberTransactions memberId={user.userId} mode="current" showReturn previewable />
       </>
     )
   }
