@@ -13,14 +13,17 @@ public class BorrowService : IBorrowService
     private readonly IBorrowTransactionRepository
         _borrowRepository;
     private readonly BorrowingPolicy _policy;
+    private readonly IAvailabilityService _availability;
 
     public BorrowService(
         IBookRepository bookRepository,
         IUserRepository userRepository,
         IBorrowTransactionRepository borrowRepository,
-        BorrowingPolicy policy)
+        BorrowingPolicy policy,
+        IAvailabilityService availability)
     {
         _policy = policy;
+        _availability = availability;
         _bookRepository = bookRepository;
         _userRepository = userRepository;
         _borrowRepository = borrowRepository;
@@ -106,6 +109,11 @@ public class BorrowService : IBorrowService
         // 7. Save changes
         await _borrowRepository.SaveChangesAsync();
 
+        // The member got the book, so any "tell me when available" request is done.
+        // Never lets a notification problem undo or fail a completed borrow.
+        try { await _availability.MarkFulfilledAsync(memberId, bookId); }
+        catch (Exception) { /* informational only */ }
+
         _policy.Apply(transaction, DateTime.UtcNow);
 
         return transaction;
@@ -166,6 +174,10 @@ public class BorrowService : IBorrowService
 
         // 6. Save
         await _borrowRepository.SaveChangesAsync();
+
+        // A copy is back: let the first people in the queue know. Runs in the
+        // background so the return itself is never slowed down or failed by email.
+        _availability.NotifyForBookInBackground(book.BookId);
 
         _policy.Apply(transaction, DateTime.UtcNow);
 

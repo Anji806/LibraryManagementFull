@@ -142,4 +142,68 @@ public class SqliteDevSchemaTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public async Task ExistingDatabaseWithoutNotificationTables_GetsThemWithTheDuplicateGuards()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"lm-dev-{Guid.NewGuid():N}.db");
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlite($"Data Source={path};Foreign Keys=True;Pooling=False")
+            .Options;
+
+        try
+        {
+            await using (var old = new ApplicationDbContext(options))
+            {
+                await old.Database.EnsureCreatedAsync();
+                old.Users.Add(new User { FullName = "U", Email = "u@test.local", PasswordHash = "x" });
+                old.Books.Add(new Book
+                {
+                    Title = "B", ISBN = "i-1", TotalCopies = 1, AvailableCopies = 0, PublishedYear = 2000,
+                    Author = new Author { AuthorName = "A" }, Category = new Category { CategoryName = "C" }
+                });
+                await old.SaveChangesAsync();
+                await old.Database.ExecuteSqlRawAsync("DROP TABLE \"Notifications\"");
+                await old.Database.ExecuteSqlRawAsync("DROP TABLE \"BookAvailabilityRequests\"");
+            }
+
+            await using var db = new ApplicationDbContext(options);
+            await SqliteDevSchema.EnsureLatestAsync(db);
+            await SqliteDevSchema.EnsureLatestAsync(db); // idempotent
+
+            var userId = (await db.Users.SingleAsync()).UserId;
+            var bookId = (await db.Books.SingleAsync()).BookId;
+
+            Notification Note(string key) => new()
+            {
+                UserId = userId, BookId = bookId, NotificationType = NotificationTypes.DueReminder,
+                DedupeKey = key, NotificationDate = new DateOnly(2026, 11, 20),
+                Status = NotificationStatuses.Pending, Attempts = 1, CreatedAt = DateTime.UtcNow
+            };
+
+            db.Notifications.Add(Note("due:1:2"));
+            await db.SaveChangesAsync();
+
+            db.Notifications.Add(Note("due:1:2")); // the same notification again
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            db.ChangeTracker.Clear();
+
+            BookAvailabilityRequest Request(string status) => new()
+            {
+                UserId = userId, BookId = bookId, Status = status, CreatedAt = DateTime.UtcNow
+            };
+
+            db.BookAvailabilityRequests.AddRange(
+                Request(AvailabilityStatuses.Cancelled), Request(AvailabilityStatuses.Cancelled), Request(AvailabilityStatuses.Waiting));
+            await db.SaveChangesAsync(); // history is unlimited, one waiting place only
+
+            db.BookAvailabilityRequests.Add(Request(AvailabilityStatuses.Waiting));
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+    }
 }

@@ -19,6 +19,7 @@ export const PERMISSIONS = Object.freeze({
   MANAGE_USERS: 'manageUsers',
   READ_LOGIN_HISTORY: 'readLoginHistory',
   SEND_TEST_EMAIL: 'sendTestEmail',
+  VIEW_NOTIFICATIONS: 'viewNotifications',
 })
 
 // Mirrors the [Authorize(Roles = ...)] attributes in the API controllers.
@@ -35,6 +36,7 @@ const permissionRoles = Object.freeze({
   [PERMISSIONS.MANAGE_USERS]: [ROLES.ADMIN],
   [PERMISSIONS.READ_LOGIN_HISTORY]: [ROLES.ADMIN],
   [PERMISSIONS.SEND_TEST_EMAIL]: [ROLES.ADMIN],
+  [PERMISSIONS.VIEW_NOTIFICATIONS]: [ROLES.ADMIN],
 })
 
 export function hasPermission(role, permission) {

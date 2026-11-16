@@ -30,6 +30,10 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
+    public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<BookAvailabilityRequest> BookAvailabilityRequests => Set<BookAvailabilityRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

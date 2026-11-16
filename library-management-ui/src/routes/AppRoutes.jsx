@@ -17,6 +17,7 @@ import { UserDetails } from '../pages/users/UserDetails.jsx'
 import { UserList } from '../pages/users/UserList.jsx'
 import { LoginHistory } from '../pages/users/LoginHistory.jsx'
 import { EmailTest } from '../pages/admin/EmailTest.jsx'
+import { Notifications } from '../pages/admin/Notifications.jsx'
 import { ALL_ROLES, PERMISSIONS, hasPermission } from '../utils/roles.js'
 import { ProtectedRoute } from './ProtectedRoute.jsx'
 import { RoleRoute } from './RoleRoute.jsx'
@@ -54,6 +55,7 @@ export function AppRoutes() {
         <Route path="/members" element={guarded(PERMISSIONS.READ_MEMBER_HISTORY, <Members />)} />
         <Route path="/users" element={guarded(PERMISSIONS.MANAGE_USERS, <UserList />)} />
         <Route path="/admin/login-history" element={guarded(PERMISSIONS.READ_LOGIN_HISTORY, <LoginHistory />)} />
+        <Route path="/admin/notifications" element={guarded(PERMISSIONS.VIEW_NOTIFICATIONS, <Notifications />)} />
         <Route path="/admin/email-test" element={guarded(PERMISSIONS.SEND_TEST_EMAIL, <EmailTest />)} />
         <Route path="/users/:id" element={guarded(PERMISSIONS.MANAGE_USERS, <UserDetails />)} />
         {/* Authors/categories are managed in place by Admins on their list pages. */}
