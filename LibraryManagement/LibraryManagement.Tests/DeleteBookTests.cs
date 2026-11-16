@@ -89,6 +89,9 @@ public class LibraryApiFactory : WebApplicationFactory<Program>
                 ["Jwt:Issuer"] = "TestIssuer",
                 ["Jwt:Audience"] = "TestAudience",
                 ["Jwt:ExpiryMinutes"] = "60",
+                // Tests send many reset requests from one address.
+                ["PasswordReset:ResendCooldownSeconds"] = "0",
+                ["PasswordReset:RequestsPerWindow"] = "100000",
                 // Satisfies the startup configuration check; the SQLite
                 // registration below replaces the real provider.
                 ["ConnectionStrings:DefaultConnection"] =

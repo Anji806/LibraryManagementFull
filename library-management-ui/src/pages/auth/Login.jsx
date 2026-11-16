@@ -147,6 +147,9 @@ export function Login() {
                 required
               />
             </div>
+            <p className="auth-forgot">
+              <Link to="/forgot-password">Forgot password?</Link>
+            </p>
             <button className="primary-button" type="submit" disabled={isSubmitting}>
               {isSubmitting ? 'Signing in...' : 'Sign in'}
             </button>

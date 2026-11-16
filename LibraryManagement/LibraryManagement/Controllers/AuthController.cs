@@ -2,6 +2,7 @@
 using LibraryManagement.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -51,6 +52,35 @@ public class AuthController : ControllerBase
         }
 
         return Ok(result);
+    }
+
+    // POST: api/auth/forgot-password
+    // Always answers the same way, so it cannot be used to find out which
+    // email addresses have an account.
+    [HttpPost("forgot-password")]
+    [EnableRateLimiting("password-reset")]
+    public async Task<IActionResult> ForgotPassword(
+        ForgotPasswordDto dto,
+        [FromServices] IPasswordResetService passwordReset)
+    {
+        await passwordReset.RequestResetAsync(dto.Email);
+
+        return Ok(new
+        {
+            message = "If an account exists for that email address, a password reset link has been sent."
+        });
+    }
+
+    // POST: api/auth/reset-password
+    [HttpPost("reset-password")]
+    [EnableRateLimiting("password-reset")]
+    public async Task<IActionResult> ResetPassword(
+        ResetPasswordDto dto,
+        [FromServices] IPasswordResetService passwordReset)
+    {
+        await passwordReset.ResetPasswordAsync(dto.Email, dto.Token, dto.NewPassword);
+
+        return Ok(new { message = "Your password has been reset. You can now sign in." });
     }
 
     // POST: api/auth/complete-login

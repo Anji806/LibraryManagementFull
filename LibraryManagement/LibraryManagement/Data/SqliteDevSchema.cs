@@ -20,6 +20,11 @@ public static class SqliteDevSchema
             await db.Database.ExecuteSqlRawAsync(statement);
         }
 
+        foreach (var statement in PasswordResetTables)
+        {
+            await db.Database.ExecuteSqlRawAsync(statement);
+        }
+
         await AddMissingColumnsAsync(db, "BorrowTransactions", BorrowColumns);
     }
 
@@ -48,6 +53,24 @@ public static class SqliteDevSchema
                 $"ALTER TABLE \"{table}\" ADD COLUMN \"{name}\" {definition}");
         }
     }
+
+    private static readonly string[] PasswordResetTables =
+    [
+        """
+        CREATE TABLE IF NOT EXISTS "PasswordResetTokens" (
+            "Id" INTEGER NOT NULL CONSTRAINT "PK_PasswordResetTokens" PRIMARY KEY AUTOINCREMENT,
+            "UserId" INTEGER NOT NULL,
+            "TokenHash" TEXT NOT NULL,
+            "ExpiryDate" TEXT NOT NULL,
+            "IsUsed" INTEGER NOT NULL,
+            "CreatedAt" TEXT NOT NULL,
+            "UsedAt" TEXT NULL,
+            CONSTRAINT "FK_PasswordResetTokens_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("UserId") ON DELETE CASCADE
+        )
+        """,
+        """CREATE UNIQUE INDEX IF NOT EXISTS "IX_PasswordResetTokens_TokenHash" ON "PasswordResetTokens" ("TokenHash")""",
+        """CREATE UNIQUE INDEX IF NOT EXISTS "IX_PasswordResetTokens_UserId_Active" ON "PasswordResetTokens" ("UserId") WHERE "IsUsed" = false"""
+    ];
 
     private static readonly string[] SessionTables =
     [

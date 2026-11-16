@@ -30,6 +30,21 @@ export async function register(details) {
   return response.data
 }
 
+// Always resolves the same way for known and unknown addresses (by design).
+export async function forgotPassword(email) {
+  const response = await api.post('/auth/forgot-password', { email }, { skipAuth: true })
+  return response.data
+}
+
+export async function resetPassword({ email, token, newPassword, confirmPassword }) {
+  const response = await api.post(
+    '/auth/reset-password',
+    { email, token, newPassword, confirmPassword },
+    { skipAuth: true },
+  )
+  return response.data
+}
+
 export async function logout() {
   return api.post('/auth/logout')
 }

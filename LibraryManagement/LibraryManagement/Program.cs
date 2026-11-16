@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
@@ -119,6 +120,45 @@ builder.Services.AddScoped<IBorrowService, BorrowService>();
 builder.Services.Configure<BorrowingOptions>(
     builder.Configuration.GetSection(BorrowingOptions.SectionName));
 builder.Services.AddSingleton<BorrowingPolicy>();
+
+// Forgot / reset password (section "PasswordReset").
+builder.Services.Configure<PasswordResetOptions>(
+    builder.Configuration.GetSection(PasswordResetOptions.SectionName));
+builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
+
+// Per-IP limit for the forgot/reset endpoints. Read from configuration when the
+// limiter is first built, so tests and deployments can change it.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"statusCode\":429,\"message\":\"Too many requests. Please wait a while and try again.\"}",
+            token);
+    };
+});
+builder.Services.AddOptions<Microsoft.AspNetCore.RateLimiting.RateLimiterOptions>()
+    .Configure<IOptions<PasswordResetOptions>>((options, reset) =>
+    {
+        var limits = reset.Value;
+
+        options.AddPolicy("password-reset", httpContext =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = Math.Max(1, limits.RequestsPerWindow),
+                    Window = TimeSpan.FromMinutes(Math.Max(1, limits.RateLimitWindowMinutes)),
+                    QueueLimit = 0
+                }));
+    });
+
+// Gmail SMTP email (section "Email"; credentials only from user secrets / environment).
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection(EmailSettings.SectionName));
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Dictionary lookups for the book preview (external API, cached in memory).
 builder.Services.AddMemoryCache();
@@ -407,6 +447,7 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 
 // ==================================================
 // GLOBAL EXCEPTION HANDLER

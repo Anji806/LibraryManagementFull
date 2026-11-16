@@ -146,6 +146,22 @@
   line-height: 1.6;
 }
 
+.auth-forgot {
+  margin: -4px 0 0;
+  text-align: right;
+  font-size: 14px;
+}
+
+.auth-forgot a {
+  color: var(--color-primary-hover);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-forgot a:hover {
+  text-decoration: underline;
+}
+
 .auth-switch {
   margin: 20px 0 0;
   color: var(--text-muted);

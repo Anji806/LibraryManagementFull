@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '../components/layout/AppLayout.jsx'
+import { ForgotPassword } from '../pages/auth/ForgotPassword.jsx'
 import { Login } from '../pages/auth/Login.jsx'
+import { ResetPassword } from '../pages/auth/ResetPassword.jsx'
 import { Register } from '../pages/auth/Register.jsx'
 import { BookCatalog } from '../pages/books/BookCatalog.jsx'
 import { BookDetails } from '../pages/books/BookDetails.jsx'
@@ -14,6 +16,7 @@ import { Forbidden, NotFound } from '../pages/StatusPages.jsx'
 import { UserDetails } from '../pages/users/UserDetails.jsx'
 import { UserList } from '../pages/users/UserList.jsx'
 import { LoginHistory } from '../pages/users/LoginHistory.jsx'
+import { EmailTest } from '../pages/admin/EmailTest.jsx'
 import { ALL_ROLES, PERMISSIONS, hasPermission } from '../utils/roles.js'
 import { ProtectedRoute } from './ProtectedRoute.jsx'
 import { RoleRoute } from './RoleRoute.jsx'
@@ -35,6 +38,8 @@ export function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/403" element={<Forbidden />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
@@ -49,6 +54,7 @@ export function AppRoutes() {
         <Route path="/members" element={guarded(PERMISSIONS.READ_MEMBER_HISTORY, <Members />)} />
         <Route path="/users" element={guarded(PERMISSIONS.MANAGE_USERS, <UserList />)} />
         <Route path="/admin/login-history" element={guarded(PERMISSIONS.READ_LOGIN_HISTORY, <LoginHistory />)} />
+        <Route path="/admin/email-test" element={guarded(PERMISSIONS.SEND_TEST_EMAIL, <EmailTest />)} />
         <Route path="/users/:id" element={guarded(PERMISSIONS.MANAGE_USERS, <UserDetails />)} />
         {/* Authors/categories are managed in place by Admins on their list pages. */}
         <Route path="/authors/manage" element={<Navigate to="/authors" replace />} />

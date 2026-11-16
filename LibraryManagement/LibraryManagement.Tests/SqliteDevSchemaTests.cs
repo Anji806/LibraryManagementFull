@@ -100,4 +100,46 @@ public class SqliteDevSchemaTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public async Task ExistingDatabaseWithoutPasswordResetTable_GetsItWithTheOneActiveTokenRule()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"lm-dev-{Guid.NewGuid():N}.db");
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlite($"Data Source={path};Foreign Keys=True;Pooling=False")
+            .Options;
+
+        try
+        {
+            await using (var old = new ApplicationDbContext(options))
+            {
+                await old.Database.EnsureCreatedAsync();
+                old.Users.Add(new User { FullName = "Keep", Email = "keep@test.local", PasswordHash = "x" });
+                await old.SaveChangesAsync();
+                await old.Database.ExecuteSqlRawAsync("DROP TABLE \"PasswordResetTokens\"");
+            }
+
+            await using var db = new ApplicationDbContext(options);
+            await SqliteDevSchema.EnsureLatestAsync(db);
+            await SqliteDevSchema.EnsureLatestAsync(db); // idempotent
+
+            var userId = (await db.Users.SingleAsync()).UserId;
+            PasswordResetToken Token(string hash, bool used) => new()
+            {
+                UserId = userId, TokenHash = hash, IsUsed = used,
+                CreatedAt = DateTime.UtcNow, ExpiryDate = DateTime.UtcNow.AddMinutes(15)
+            };
+
+            db.PasswordResetTokens.AddRange(Token("a", used: true), Token("b", used: true), Token("c", used: false));
+            await db.SaveChangesAsync(); // many used tokens, one active: fine
+
+            db.PasswordResetTokens.Add(Token("d", used: false));
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync()); // second active: refused
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(path);
+        }
+    }
 }
