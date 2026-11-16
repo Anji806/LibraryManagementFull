@@ -1,4 +1,4 @@
-﻿import { useCallback, useState } from 'react'
+﻿import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { EmptyState, PageHeader, ResourceView } from '../../components/ui/PageParts.jsx'
 import { useApiResource } from '../../hooks/useApiResource.js'
@@ -8,6 +8,7 @@ import { useToast } from '../../hooks/useToast.js'
 import { getApiErrorMessage } from '../../services/api.js'
 import { getBooks } from '../../services/bookService.js'
 import { borrowBook } from '../../services/borrowingService.js'
+import { getMyAvailabilityNotices, requestAvailabilityNotice } from '../../services/availabilityService.js'
 import { Modal } from '../../components/ui/Modal.jsx'
 import { BookPreview } from '../../components/books/BookPreview.jsx'
 import { filterBooks } from '../../utils/books.js'
@@ -24,6 +25,20 @@ export function BookCatalog() {
   const [borrowingId, setBorrowingId] = useState(null)
   const [detailsBook, setDetailsBook] = useState(null)
   const [previewBook, setPreviewBook] = useState(null)
+  // Books this member asked to be emailed about, and the one being saved.
+  const [waitingIds, setWaitingIds] = useState(() => new Set())
+  const [notifyingId, setNotifyingId] = useState(null)
+
+  useEffect(() => {
+    if (role !== ROLES.MEMBER) return undefined
+    let active = true
+    getMyAvailabilityNotices()
+      .then((requests) => {
+        if (active) setWaitingIds(new Set(requests.filter((r) => r.status === 'Waiting').map((r) => r.bookId)))
+      })
+      .catch(() => { /* the button simply starts enabled */ })
+    return () => { active = false }
+  }, [role])
 
   const fetchBooks = useCallback(
     async () => filterBooks(await getBooks(), query),
@@ -50,6 +65,19 @@ export function BookCatalog() {
       toast.error(getApiErrorMessage(error, 'The book could not be borrowed.'))
     } finally {
       setBorrowingId(null)
+    }
+  }
+
+  async function notifyWhenAvailable(book) {
+    setNotifyingId(book.bookId)
+    try {
+      await requestAvailabilityNotice(book.bookId)
+      setWaitingIds((current) => new Set(current).add(book.bookId))
+      toast.success(`We'll email you when "${book.title}" is available.`)
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'The request could not be saved.'))
+    } finally {
+      setNotifyingId(null)
     }
   }
 
@@ -150,6 +178,9 @@ export function BookCatalog() {
             canBorrow={role === ROLES.MEMBER}
             borrowing={borrowingId === detailsBook.bookId}
             onBorrow={() => handleBorrow(detailsBook)}
+            onNotify={() => notifyWhenAvailable(detailsBook)}
+            notifying={notifyingId === detailsBook.bookId}
+            waiting={waitingIds.has(detailsBook.bookId)}
             onPreview={() => {
               setPreviewBook(detailsBook)
               setDetailsBook(null)

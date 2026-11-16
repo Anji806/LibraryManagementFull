@@ -89,6 +89,10 @@ public class LibraryApiFactory : WebApplicationFactory<Program>
                 ["Jwt:Issuer"] = "TestIssuer",
                 ["Jwt:Audience"] = "TestAudience",
                 ["Jwt:ExpiryMinutes"] = "60",
+                // The borrowing tests assume a 14-day loan and a 2-day "due soon"
+                // window, whatever the real appsettings.json says.
+                ["Borrowing:LoanPeriodDays"] = "14",
+                ["Borrowing:DueSoonDays"] = "2",
                 // Tests send many reset requests from one address.
                 ["PasswordReset:ResendCooldownSeconds"] = "0",
                 ["PasswordReset:RequestsPerWindow"] = "100000",

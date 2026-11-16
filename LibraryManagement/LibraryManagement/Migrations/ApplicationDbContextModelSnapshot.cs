@@ -116,6 +116,42 @@ namespace LibraryManagement.Migrations
                     b.ToTable("Books", (string)null);
                 });
 
+            modelBuilder.Entity("LibraryManagement.Models.BookAvailabilityRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BookId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NotifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "BookId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_BookAvailabilityRequests_UserId_BookId_Waiting")
+                        .HasFilter("\"Status\" = 'Waiting'");
+
+                    b.HasIndex("BookId", "Status", "CreatedAt");
+
+                    b.ToTable("BookAvailabilityRequests", (string)null);
+                });
+
             modelBuilder.Entity("LibraryManagement.Models.BorrowTransaction", b =>
                 {
                     b.Property<int>("TransactionId")
@@ -263,6 +299,69 @@ namespace LibraryManagement.Migrations
 
                             t.HasCheckConstraint("CK_LoginHistory_LoginStatus", "\"LoginStatus\" IN ('Success', 'Failed')");
                         });
+                });
+
+            modelBuilder.Entity("LibraryManagement.Models.Notification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BookId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DedupeKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("NotificationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("NotificationType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("TransactionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookId");
+
+                    b.HasIndex("DedupeKey")
+                        .IsUnique();
+
+                    b.HasIndex("TransactionId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "LastAttemptAt");
+
+                    b.ToTable("Notifications", (string)null);
                 });
 
             modelBuilder.Entity("LibraryManagement.Models.PasswordResetToken", b =>
@@ -488,6 +587,21 @@ namespace LibraryManagement.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("LibraryManagement.Models.BookAvailabilityRequest", b =>
+                {
+                    b.HasOne("LibraryManagement.Models.Book", null)
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LibraryManagement.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LibraryManagement.Models.BorrowTransaction", b =>
                 {
                     b.HasOne("LibraryManagement.Models.Book", "Book")
@@ -512,6 +626,26 @@ namespace LibraryManagement.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("LibraryManagement.Models.Notification", b =>
+                {
+                    b.HasOne("LibraryManagement.Models.Book", null)
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LibraryManagement.Models.BorrowTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("TransactionId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("LibraryManagement.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("LibraryManagement.Models.PasswordResetToken", b =>

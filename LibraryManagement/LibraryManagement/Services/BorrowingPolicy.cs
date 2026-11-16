@@ -9,13 +9,13 @@ public class BorrowingOptions
     public const string SectionName = "Borrowing";
 
     /// <summary>How long a member may keep a book.</summary>
-    public int LoanPeriodDays { get; set; } = 14;
+    public int LoanPeriodDays { get; set; } = 2;
 
     /// <summary>Fine per overdue day, in rupees.</summary>
     public decimal FinePerDay { get; set; } = 5m;
 
     /// <summary>A loan is "Due Soon" when this many days (or fewer) remain.</summary>
-    public int DueSoonDays { get; set; } = 2;
+    public int DueSoonDays { get; set; } = 1;
 
     /// <summary>
     /// IANA zone that defines when a "day" ends (a book returned any time on
@@ -156,6 +156,14 @@ public class BorrowingPolicy
         t.OutstandingFine = Math.Max(0m, status.Fine - t.FinePaid);
         t.DisplayStatus = status.DisplayStatus;
     }
+
+    /// <summary>Calendar date of a UTC instant in the library time zone.</summary>
+    public DateOnly ToLocalDate(DateTime utc) => LocalDate(utc);
+
+    /// <summary>Wall-clock time of a UTC instant in the library time zone.</summary>
+    public DateTime ToLocalTime(DateTime utc)
+        => TimeZoneInfo.ConvertTimeFromUtc(
+            utc.Kind == DateTimeKind.Utc ? utc : DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone);
 
     private DateOnly LocalDate(DateTime utc)
     {

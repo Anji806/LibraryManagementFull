@@ -25,6 +25,11 @@ public static class SqliteDevSchema
             await db.Database.ExecuteSqlRawAsync(statement);
         }
 
+        foreach (var statement in NotificationTables)
+        {
+            await db.Database.ExecuteSqlRawAsync(statement);
+        }
+
         await AddMissingColumnsAsync(db, "BorrowTransactions", BorrowColumns);
     }
 
@@ -53,6 +58,47 @@ public static class SqliteDevSchema
                 $"ALTER TABLE \"{table}\" ADD COLUMN \"{name}\" {definition}");
         }
     }
+
+    private static readonly string[] NotificationTables =
+    [
+        """
+        CREATE TABLE IF NOT EXISTS "Notifications" (
+            "Id" INTEGER NOT NULL CONSTRAINT "PK_Notifications" PRIMARY KEY AUTOINCREMENT,
+            "UserId" INTEGER NOT NULL,
+            "BookId" INTEGER NOT NULL,
+            "TransactionId" INTEGER NULL,
+            "NotificationType" TEXT NOT NULL,
+            "DedupeKey" TEXT NOT NULL,
+            "NotificationDate" TEXT NOT NULL,
+            "Status" TEXT NOT NULL,
+            "Attempts" INTEGER NOT NULL,
+            "CreatedAt" TEXT NOT NULL,
+            "LastAttemptAt" TEXT NULL,
+            "SentAt" TEXT NULL,
+            "ErrorMessage" TEXT NULL,
+            CONSTRAINT "FK_Notifications_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("UserId") ON DELETE CASCADE,
+            CONSTRAINT "FK_Notifications_Books_BookId" FOREIGN KEY ("BookId") REFERENCES "Books" ("BookId") ON DELETE CASCADE,
+            CONSTRAINT "FK_Notifications_BorrowTransactions_TransactionId" FOREIGN KEY ("TransactionId") REFERENCES "BorrowTransactions" ("TransactionId") ON DELETE CASCADE
+        )
+        """,
+        """CREATE UNIQUE INDEX IF NOT EXISTS "IX_Notifications_DedupeKey" ON "Notifications" ("DedupeKey")""",
+        """CREATE INDEX IF NOT EXISTS "IX_Notifications_Status_LastAttemptAt" ON "Notifications" ("Status", "LastAttemptAt")""",
+        """CREATE INDEX IF NOT EXISTS "IX_Notifications_UserId" ON "Notifications" ("UserId")""",
+        """
+        CREATE TABLE IF NOT EXISTS "BookAvailabilityRequests" (
+            "Id" INTEGER NOT NULL CONSTRAINT "PK_BookAvailabilityRequests" PRIMARY KEY AUTOINCREMENT,
+            "UserId" INTEGER NOT NULL,
+            "BookId" INTEGER NOT NULL,
+            "Status" TEXT NOT NULL,
+            "CreatedAt" TEXT NOT NULL,
+            "NotifiedAt" TEXT NULL,
+            CONSTRAINT "FK_BookAvailabilityRequests_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("UserId") ON DELETE CASCADE,
+            CONSTRAINT "FK_BookAvailabilityRequests_Books_BookId" FOREIGN KEY ("BookId") REFERENCES "Books" ("BookId") ON DELETE CASCADE
+        )
+        """,
+        """CREATE UNIQUE INDEX IF NOT EXISTS "IX_BookAvailabilityRequests_UserId_BookId_Waiting" ON "BookAvailabilityRequests" ("UserId", "BookId") WHERE "Status" = 'Waiting'""",
+        """CREATE INDEX IF NOT EXISTS "IX_BookAvailabilityRequests_BookId_Status_CreatedAt" ON "BookAvailabilityRequests" ("BookId", "Status", "CreatedAt")"""
+    ];
 
     private static readonly string[] PasswordResetTables =
     [

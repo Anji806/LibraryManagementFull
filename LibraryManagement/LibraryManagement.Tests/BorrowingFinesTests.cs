@@ -16,7 +16,7 @@ public class BorrowingPolicyTests
 {
     private static BorrowingPolicy Policy(Action<BorrowingOptions>? configure = null)
     {
-        var options = new BorrowingOptions();
+        var options = new BorrowingOptions { LoanPeriodDays = 14, DueSoonDays = 2 };
         configure?.Invoke(options);
         return new BorrowingPolicy(Options.Create(options));
     }

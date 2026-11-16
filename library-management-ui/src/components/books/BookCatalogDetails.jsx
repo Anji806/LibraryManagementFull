@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import { getBookPreviewContent } from '../../data/bookPreviewContent.js'
 
-export function BookCatalogDetails({ book, borrowing, canBorrow, onBorrow, onPreview }) {
+export function BookCatalogDetails({
+  book,
+  borrowing,
+  canBorrow,
+  onBorrow,
+  onPreview,
+  onNotify,
+  notifying = false,
+  waiting = false,
+}) {
   const researched = getBookPreviewContent(book)
   const [coverFailed, setCoverFailed] = useState(false)
   const coverUrl = book.coverUrl || researched?.coverUrl
@@ -61,6 +70,16 @@ export function BookCatalogDetails({ book, borrowing, canBorrow, onBorrow, onPre
               onClick={onBorrow}
             >
               {borrowing ? 'Borrowing...' : 'Borrow'}
+            </button>
+          )}
+          {canBorrow && book.availableCopies <= 0 && onNotify && (
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={waiting || notifying}
+              onClick={onNotify}
+            >
+              {waiting ? "You're on the waiting list" : notifying ? 'Saving...' : 'Notify me when available'}
             </button>
           )}
           <button className="secondary-button" type="button" onClick={onPreview}>

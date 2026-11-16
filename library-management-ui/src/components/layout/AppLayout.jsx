@@ -164,6 +164,7 @@ const navigation = [
   },
   { label: 'Users', path: '/users', icon: <IconUsers />, permission: PERMISSIONS.MANAGE_USERS },
   { label: 'Login history', path: '/admin/login-history', icon: <IconClock />, permission: PERMISSIONS.READ_LOGIN_HISTORY },
+  { label: 'Notifications', path: '/admin/notifications', icon: <IconMail />, permission: PERMISSIONS.VIEW_NOTIFICATIONS },
   { label: 'Email test', path: '/admin/email-test', icon: <IconMail />, permission: PERMISSIONS.SEND_TEST_EMAIL },
 ]
 

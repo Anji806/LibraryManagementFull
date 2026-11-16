@@ -121,6 +121,15 @@ builder.Services.Configure<BorrowingOptions>(
     builder.Configuration.GetSection(BorrowingOptions.SectionName));
 builder.Services.AddSingleton<BorrowingPolicy>();
 
+// Email notifications: due reminders, overdue notices, book availability
+// (section "Notifications"). The scheduler runs in the background.
+builder.Services.Configure<NotificationOptions>(
+    builder.Configuration.GetSection(NotificationOptions.SectionName));
+builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+builder.Services.AddScoped<ILoanNotificationService, LoanNotificationService>();
+builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
+builder.Services.AddHostedService<NotificationBackgroundService>();
+
 // Forgot / reset password (section "PasswordReset").
 builder.Services.Configure<PasswordResetOptions>(
     builder.Configuration.GetSection(PasswordResetOptions.SectionName));

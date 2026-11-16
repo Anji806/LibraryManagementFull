@@ -24,7 +24,7 @@ public class LegacyLoanTests : IClassFixture<LibraryApiFactory>
         => new(2026, month, day, hour, 0, 0, DateTimeKind.Utc);
 
     private static BorrowingPolicy PolicyWithFinesFrom(DateOnly start)
-        => new(Options.Create(new BorrowingOptions { FinesStartDate = start }));
+        => new(Options.Create(new BorrowingOptions { LoanPeriodDays = 14, DueSoonDays = 2, FinesStartDate = start }));
 
     // Borrowed 1 Nov -> due 15 Nov. Fines go live on 20 Nov.
     private static readonly DateTime Borrowed = Utc(11, 1, 10);
@@ -73,7 +73,7 @@ public class LegacyLoanTests : IClassFixture<LibraryApiFactory>
     [Fact]
     public void WithoutAGoLiveDate_FinesCountFromTheDueDate()
     {
-        var policy = new BorrowingPolicy(Options.Create(new BorrowingOptions()));
+        var policy = new BorrowingPolicy(Options.Create(new BorrowingOptions { LoanPeriodDays = 14, DueSoonDays = 2 }));
         var due = policy.ComputeDueDate(Borrowed);
 
         Assert.Equal(20m, policy.CalculateFine(due, Utc(11, 19)));
