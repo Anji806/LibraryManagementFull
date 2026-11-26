@@ -24,12 +24,13 @@ function loadGoogleScript() {
 export function GoogleSignInButton({ onCredential, onError, disabled }) {
   const containerRef = useRef(null)
   const callbackRef = useRef(onCredential)
+  const isConfigured = Boolean(GOOGLE_CLIENT_ID)
   useEffect(() => {
     callbackRef.current = onCredential
   })
 
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return undefined
+    if (!isConfigured) return undefined
     let cancelled = false
 
     loadGoogleScript()
@@ -52,14 +53,28 @@ export function GoogleSignInButton({ onCredential, onError, disabled }) {
     return () => {
       cancelled = true
     }
-  }, [onError])
-
-  if (!GOOGLE_CLIENT_ID) return null
+  }, [isConfigured, onError])
 
   return (
     <div className="google-signin" style={{ pointerEvents: disabled ? 'none' : 'auto', opacity: disabled ? 0.6 : 1 }}>
       <div className="google-signin-divider" style={{ textAlign: 'center', margin: '16px 0', color: '#6b7280' }}>or</div>
-      <div ref={containerRef} style={{ display: 'flex', justifyContent: 'center' }} />
+      {isConfigured ? (
+        <div ref={containerRef} style={{ display: 'flex', justifyContent: 'center' }} />
+      ) : (
+        <>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={disabled}
+            onClick={() => onError?.('Google sign-in needs to be configured. Set VITE_GOOGLE_CLIENT_ID in the UI environment and GoogleAuth:ClientId in the API configuration.')}
+          >
+            Continue with Google
+          </button>
+          <p className="auth-intro" style={{ textAlign: 'center', marginTop: 8 }}>
+            Google sign-in is not configured yet.
+          </p>
+        </>
+      )}
     </div>
   )
 }
