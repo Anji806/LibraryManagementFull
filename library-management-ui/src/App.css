@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    APP ROOT
    ============================================================ */
 #root 
@@ -657,6 +657,31 @@ label.field {
   flex-direction: column;
 }
 
+/* Menu-link loader: a bar that grows from the centre out to both sides. */
+.workspace {
+  position: relative;
+}
+
+.nav-loader {
+  position: absolute;
+  inset: 56px 0 auto 0;
+  z-index: 30;
+  pointer-events: none;
+  border-top: 3px solid var(--color-primary);
+  animation: nav-loader-grow 1200ms ease-in-out forwards;
+}
+
+/* The border opens from the centre out to both sides, then closes back to the centre. */
+@keyframes nav-loader-grow {
+  0% { clip-path: inset(0 50% 0 50%); }
+  50% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 50% 0 50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-loader { animation: none; clip-path: none; }
+}
+
 .topbar {
   display: flex;
   height: 56px;
@@ -869,6 +894,59 @@ label.field {
   min-width: 200px;
 }
 
+.search-suggest {
+  position: relative;
+  flex: 1 1 280px;
+}
+
+.search-suggest input[type='search'] {
+  width: 100%;
+}
+
+.search-ticker {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 36px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.search-ticker-label {
+  flex: none;
+  line-height: 40px;
+}
+
+.search-ticker-window {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  overflow: hidden;
+}
+
+.search-ticker-track {
+  transition: transform 500ms ease;
+}
+
+.search-ticker-item {
+  display: block;
+  height: 40px;
+  line-height: 40px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-ticker-track { transition: none; }
+}
 .toolbar input[type='search']:focus,
 .toolbar input[type='text']:focus,
 .toolbar input[type='number']:focus {
@@ -1684,7 +1762,7 @@ label.field {
 }
 
 /* ============================================================
-   RESPONSIVE — MOBILE
+   RESPONSIVE â€” MOBILE
    ============================================================ */
 @media (max-width: 800px) {
   .auth-shell {
@@ -1756,7 +1834,7 @@ label.field {
 }
 
 /* ============================================================
-   RESPONSIVE — TABLET & MOBILE
+   RESPONSIVE â€” TABLET & MOBILE
    <= 1024px: sidebar becomes a slide-in drawer (toggle in topbar)
    <= 640px : compact topbar, stacked headings, full-width controls
    <= 400px : small phones

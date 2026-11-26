@@ -217,6 +217,24 @@ export function AppLayout() {
   const lastPathname = useRef(null)
   const { pathname } = useLocation()
 
+  // Menu links show a short loader (opening from the centre to both sides, then closing back) before the page opens.
+  const [navigating, setNavigating] = useState(false)
+  const navTimer = useRef(null)
+  useEffect(() => () => clearTimeout(navTimer.current), [])
+
+  function handleNavClick(event, path) {
+    closeDrawer()
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return
+    event.preventDefault()
+    if (path === pathname) return
+    clearTimeout(navTimer.current)
+    setNavigating(true)
+    navTimer.current = setTimeout(() => {
+      navigate(path)
+      setNavigating(false)
+    }, 1200)
+  }
+
   // After client-side navigation, move focus to the page content (like a full page load would).
   useEffect(() => {
     // Skip the initial mount (also under StrictMode's double effect run).
@@ -342,7 +360,7 @@ export function AppLayout() {
                   key={item.path}
                   to={item.path}
                   end={item.exact}
-                  onClick={closeDrawer}
+                  onClick={(event) => handleNavClick(event, item.path)}
                 >
                   <span className="nav-icon">{item.icon}</span>
                   {role === 'Member' && item.memberLabel ? item.memberLabel : item.label}
@@ -408,6 +426,7 @@ export function AppLayout() {
             </button>
           </div>
         </header>
+        {navigating && <div className="nav-loader" role="progressbar" aria-label="Opening page" />}
         <main className="page-content" id="main-content" tabIndex={-1} ref={mainRef}>
           <Outlet />
         </main>

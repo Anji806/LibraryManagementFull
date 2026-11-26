@@ -22,6 +22,9 @@ export function BookCatalog() {
   const toast = useToast()
   const [input, setInput] = useState('')
   const [query, setQuery] = useState('')
+  const [allTitles, setAllTitles] = useState([])
+  const [focused, setFocused] = useState(false)
+  const [slide, setSlide] = useState(0)
   const [borrowingId, setBorrowingId] = useState(null)
   const [detailsBook, setDetailsBook] = useState(null)
   const [previewBook, setPreviewBook] = useState(null)
@@ -39,6 +42,24 @@ export function BookCatalog() {
       .catch(() => { /* the button simply starts enabled */ })
     return () => { active = false }
   }, [role])
+
+  // Titles of available books, loaded once, for the scrolling search-bar ticker.
+  useEffect(() => {
+    let active = true
+    getBooks()
+      .then((all) => {
+        if (active) setAllTitles([...new Set(all.filter((b) => b.availableCopies > 0).map((b) => b.title))])
+      })
+      .catch(() => { /* the ticker is optional */ })
+    return () => { active = false }
+  }, [])
+
+  // Roll the ticker up one title every few seconds.
+  useEffect(() => {
+    if (allTitles.length < 2) return undefined
+    const timer = setInterval(() => setSlide((s) => (s >= allTitles.length ? s : s + 1)), 2500)
+    return () => clearInterval(timer)
+  }, [allTitles.length])
 
   const fetchBooks = useCallback(
     async () => filterBooks(await getBooks(), query),
@@ -95,13 +116,37 @@ export function BookCatalog() {
         }
       />
       <form className="toolbar" onSubmit={handleSearch} role="search">
-        <input
-          type="search"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Search by title, author, category or year..."
-          aria-label="Search books by title, author, category or year"
-        />
+        <div className="search-suggest">
+          <input
+            type="search"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder={allTitles.length && !focused ? '' : 'Search by title, author, category or year...'}
+            aria-label="Search books by title, author, category or year"
+          />
+          {allTitles.length > 0 && !focused && !input && (
+            <div className="search-ticker" aria-hidden="true">
+              <span className="search-ticker-label">Explore the</span>
+              <div className="search-ticker-window">
+                <div
+                  className="search-ticker-track"
+                  style={{
+                    transform: `translateY(-${slide * 40}px)`,
+                    transition: slide === 0 ? 'none' : undefined,
+                  }}
+                  onTransitionEnd={() => { if (slide >= allTitles.length) setSlide(0) }}
+                >
+                  {/* the first title is repeated so the roll loops without a jump */}
+                  {[...allTitles, allTitles[0]].map((title, i) => (
+                    <strong className="search-ticker-item" key={i}>&ldquo;{title}&rdquo;</strong>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         <button className="primary-button" type="submit">Search</button>
         {query && (
           <button
