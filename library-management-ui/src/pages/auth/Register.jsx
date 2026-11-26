@@ -44,7 +44,7 @@ export function Register() {
           <h1>Your next chapter starts here.</h1>
           <p>Create a library account to explore the catalog and track your borrowing activity.</p>
         </div>
-        <p className="auth-footer">New registrations receive the Member role.</p>
+        {/* <p className="auth-footer">New registrations receive the Member role.</p> */}
       </aside>
       <section className="auth-panel">
         <div className="auth-form-wrap">

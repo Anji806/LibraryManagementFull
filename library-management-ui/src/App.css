@@ -22,19 +22,25 @@
    AUTH LAYOUT
    ============================================================ */
 .auth-shell {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(400px, 0.78fr);
+  grid-template-columns: minmax(320px, 1.1fr) minmax(360px, 0.9fr);
   background: var(--bg-page);
+  overflow: hidden;
 }
 
 .auth-aside {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 40px clamp(32px, 6vw, 80px);
+  height: 100%;
+  padding: clamp(16px, 3vh, 32px) clamp(24px, 4vw, 56px);
   color: #fff;
   background: var(--color-primary);
+  overflow: hidden;
 }
 
 .brand {
@@ -42,15 +48,15 @@
   align-items: center;
   gap: 10px;
   width: fit-content;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 0;
 }
 
 .brand-icon {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: var(--radius-md);
@@ -58,8 +64,8 @@
 }
 
 .brand-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.75;
@@ -68,22 +74,24 @@
 }
 
 .auth-aside-copy {
-  max-width: 480px;
-  margin: 32px auto;
+  max-width: 440px;
+  margin: auto auto;
   text-align: center;
 }
 
 .auth-hero-logo {
   display: block;
-  width: clamp(140px, 18vw, 220px);
+  width: clamp(75px, 11vh, 125px);
+  max-height: 125px;
   height: auto;
-  margin: 0 auto 32px;
+  object-fit: contain;
+  margin: 0 auto clamp(8px, 1.8vh, 16px);
 }
 
 .eyebrow {
-  margin: 0 0 12px;
+  margin: 0 0 clamp(4px, 1vh, 8px);
   color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
+  font-size: clamp(11px, 1.2vh, 12.5px);
   font-weight: 600;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -91,65 +99,86 @@
 
 .auth-aside h1 {
   margin: 0;
-  font-size: clamp(30px, 4vw, 46px);
+  font-size: clamp(22px, 2.5vw, 34px);
   font-weight: 700;
   letter-spacing: 0;
-  line-height: 1.1;
+  line-height: 1.18;
   color: #fff;
 }
 
 .auth-aside-copy > p:last-child {
-  max-width: 380px;
-  margin: 18px auto 0;
+  max-width: 360px;
+  margin: clamp(6px, 1.4vh, 12px) auto 0;
   color: rgba(255, 255, 255, 0.92);
-  font-size: 16px;
-  line-height: 1.75;
+  font-size: clamp(13px, 1.4vh, 14.5px);
+  line-height: 1.5;
 }
 
 .auth-footer {
   color: rgba(255, 255, 255, 0.8);
-  font-size: 13px;
+  font-size: 12px;
+  margin: 0;
 }
 
 .auth-panel {
-  display: grid;
-  padding: 48px 28px;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: clamp(16px, 2.8vh, 32px) clamp(20px, 3vw, 40px);
   background: var(--bg-card);
+  overflow-y: auto;
 }
 
 .auth-form-wrap {
-  width: min(100%, 400px);
+  width: min(100%, 380px);
+  margin: auto 0;
 }
 
 .auth-eyebrow {
-  margin: 0 0 6px;
+  margin: 0 0 3px;
   color: var(--color-primary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.8px;
   text-transform: uppercase;
 }
 
 .auth-form-wrap h2 {
-  margin: 0 0 6px;
+  margin: 0 0 3px;
   color: var(--text-main);
-  font-size: 28px;
+  font-size: clamp(21px, 2.2vw, 25px);
   font-weight: 700;
   letter-spacing: 0;
+  line-height: 1.2;
 }
 
 .auth-intro {
-  margin: 0 0 28px;
+  margin: 0 0 clamp(8px, 1.6vh, 16px);
   color: var(--text-muted);
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.auth-form .field {
+  margin: 0 0 clamp(6px, 1.3vh, 11px);
+  gap: 3px;
+}
+
+.auth-form .field label {
+  font-size: 13.5px;
+}
+
+.auth-form .field input {
+  height: 38px;
+  font-size: 14px;
 }
 
 .auth-forgot {
-  margin: -4px 0 0;
+  margin: -2px 0 0;
   text-align: right;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .auth-forgot a {
@@ -162,10 +191,38 @@
   text-decoration: underline;
 }
 
-.auth-switch {
-  margin: 20px 0 0;
-  color: var(--text-muted);
+.auth-form .primary-button {
+  width: 100%;
+  height: 38px;
+  margin-top: clamp(4px, 1vh, 8px);
   font-size: 15px;
+}
+
+.google-signin {
+  width: 100%;
+}
+
+.google-signin-divider {
+  margin: clamp(6px, 1vh, 10px) 0 !important;
+  font-size: 13px;
+}
+
+.google-signin .secondary-button {
+  width: 100%;
+  height: 38px;
+  font-size: 14px;
+}
+
+.google-signin .auth-intro {
+  margin: 4px 0 0 !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+.auth-switch {
+  margin: clamp(8px, 1.4vh, 14px) 0 0;
+  color: var(--text-muted);
+  font-size: 13.5px;
   text-align: center;
 }
 
@@ -298,13 +355,6 @@ label.field {
   font-size: 14px;
 }
 
-/* Full width variant for auth form */
-.auth-form .primary-button {
-  width: 100%;
-  height: 40px;
-  margin-top: 6px;
-  font-size: 16px;
-}
 
 .secondary-button {
   display: inline-flex;
@@ -1638,26 +1688,33 @@ label.field {
    ============================================================ */
 @media (max-width: 800px) {
   .auth-shell {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    max-height: none;
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
 
   .auth-aside {
-    min-height: 220px;
-    padding: 24px 24px 26px;
+    height: auto;
+    min-height: auto;
+    padding: 16px 20px;
   }
 
   .auth-aside-copy {
-    margin: 20px auto;
+    margin: 8px auto;
   }
 
   .auth-hero-logo {
-    width: 96px;
-    margin-bottom: 16px;
+    width: 60px;
+    max-height: 60px;
+    margin-bottom: 8px;
   }
 
   .auth-aside h1 {
-    font-size: 28px;
-    max-width: 380px;
+    font-size: 20px;
+    max-width: 320px;
   }
 
   .auth-aside-copy > p:last-child,
@@ -1666,7 +1723,9 @@ label.field {
   }
 
   .auth-panel {
-    padding: 36px 20px 48px;
+    height: auto;
+    padding: 20px 20px 28px;
+    overflow-y: visible;
   }
 
   .topbar-user-info {
@@ -1679,6 +1738,20 @@ label.field {
 
   .shortcut-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 560px) {
+  .auth-shell {
+    height: auto;
+    min-height: 100vh;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .auth-panel {
+    height: auto;
+    overflow-y: visible;
   }
 }
 
