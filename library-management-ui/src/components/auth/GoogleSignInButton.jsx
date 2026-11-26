@@ -46,6 +46,7 @@ export function GoogleSignInButton({ onCredential, onError, disabled }) {
           text: 'continue_with',
           shape: 'rectangular',
           width: Math.min(containerRef.current.offsetWidth || 320, 400),
+          use_fedcm_for_button: true,
         })
       })
       .catch(() => onError?.('Google sign-in is unavailable right now.'))
