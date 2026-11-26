@@ -48,3 +48,13 @@ export async function resetPassword({ email, token, newPassword, confirmPassword
 export async function logout() {
   return api.post('/auth/logout')
 }
+
+// Signs in (or signs up) with the Google ID token from Google Identity Services.
+export async function googleLogin(idToken) {
+  const response = await api.post(
+    '/auth/google',
+    { idToken, deviceId: getDeviceId() },
+    { skipAuth: true },
+  )
+  return response.data
+}

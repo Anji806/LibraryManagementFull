@@ -54,6 +54,20 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
+    // POST: api/auth/google
+    [HttpPost("google")]
+    public async Task<IActionResult> GoogleLogin(GoogleLoginDto dto)
+    {
+        var result = await _authService.GoogleLoginAsync(dto);
+
+        if (result.DeviceLimit is not null)
+        {
+            return StatusCode(StatusCodes.Status409Conflict, result.DeviceLimit);
+        }
+
+        return Ok(result);
+    }
+
     // POST: api/auth/forgot-password
     // Always answers the same way, so it cannot be used to find out which
     // email addresses have an account.

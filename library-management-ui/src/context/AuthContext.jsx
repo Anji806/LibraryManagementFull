@@ -32,6 +32,11 @@ export function AuthProvider({ children }) {
     [acceptAuthResponse],
   )
 
+  const googleLogin = useCallback(
+    async (idToken) => acceptAuthResponse(await authService.googleLogin(idToken)),
+    [acceptAuthResponse],
+  )
+
   const completeLogin = useCallback(
     async (challenge) => acceptAuthResponse(await authService.completeLogin(challenge)),
     [acceptAuthResponse],
@@ -72,10 +77,11 @@ export function AuthProvider({ children }) {
       sessionExpired,
       login,
       completeLogin,
+      googleLogin,
       register,
       logout,
     }),
-    [initializationError, isLoading, login, completeLogin, logout, register, session, sessionExpired],
+    [initializationError, isLoading, login, completeLogin, googleLogin, logout, register, session, sessionExpired],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

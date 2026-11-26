@@ -2,13 +2,14 @@ import { useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
 import { DeviceLimitPanel } from '../../components/auth/DeviceLimitPanel.jsx'
+import { GoogleSignInButton } from '../../components/auth/GoogleSignInButton.jsx'
 import { FormError } from '../../components/ui/PageParts.jsx'
 import { useSingleFlight } from '../../hooks/useSingleFlight.js'
 import { getApiErrorMessage } from '../../services/api.js'
 import { handleFormKeyDown } from '../../utils/keyboard.js'
 
 export function Login() {
-  const { login, completeLogin, isAuthenticated, isLoading, sessionExpired } = useAuth()
+  const { login, completeLogin, googleLogin, isAuthenticated, isLoading, sessionExpired } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -38,6 +39,25 @@ export function Login() {
         setPassword('')
       } else {
         setError(getApiErrorMessage(requestError, 'Sign in failed.'))
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  })
+
+  const handleGoogleCredential = useSingleFlight(async (idToken) => {
+    setError('')
+    setIsSubmitting(true)
+    try {
+      await googleLogin(idToken)
+      navigate(location.state?.from?.pathname || '/dashboard', { replace: true })
+    } catch (requestError) {
+      const limit = requestError.response?.data
+      if (requestError.response?.status === 409 && limit?.code === 'DEVICE_LIMIT_REACHED') {
+        setLimitError('')
+        setDeviceLimit(limit)
+      } else {
+        setError(getApiErrorMessage(requestError, 'Google sign-in failed.'))
       }
     } finally {
       setIsSubmitting(false)
@@ -154,6 +174,7 @@ export function Login() {
               {isSubmitting ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
+          <GoogleSignInButton onCredential={handleGoogleCredential} onError={setError} disabled={isSubmitting} />
           <p className="auth-switch">
             New to the library? <Link to="/register">Create an account</Link>
           </p>

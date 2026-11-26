@@ -6,7 +6,9 @@ using LibraryManagement.Repositories.Interfaces;
 using LibraryManagement.Services.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Http;
+using Google.Apis.Auth;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace LibraryManagement.Services.Implementations;
 
@@ -20,6 +22,7 @@ public class AuthService : IAuthService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuthService> _logger;
     private readonly ISessionService _sessions;
+    private readonly GoogleAuthOptions _google;
 
     public AuthService(
         IAuthRepository authRepository,
@@ -27,9 +30,11 @@ public class AuthService : IAuthService
         ILoginHistoryService loginHistory,
         IHttpContextAccessor httpContextAccessor,
         ILogger<AuthService> logger,
-        ISessionService sessions)
+        ISessionService sessions,
+        IOptions<GoogleAuthOptions> googleOptions)
     {
         _sessions = sessions;
+        _google = googleOptions.Value;
         _authRepository = authRepository;
         _jwtTokenGenerator = jwtTokenGenerator;
         _passwordHasher = new PasswordHasher<User>();
@@ -129,6 +134,72 @@ public class AuthService : IAuthService
         }
 
         return await SignInAsync(user, started.Session!, dto.Email);
+    }
+
+    // Sign in (or sign up) with a Google ID token. Reuses the same device-limit,
+    // session and audit flow as the password login.
+    public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(_google.ClientId))
+        {
+            throw new BusinessRuleException("Google sign-in is not configured.");
+        }
+
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await GoogleJsonWebSignature.ValidateAsync(
+                dto.IdToken,
+                new GoogleJsonWebSignature.ValidationSettings { Audience = [_google.ClientId] });
+        }
+        catch (InvalidJwtException)
+        {
+            await RecordLoginAttemptAsync("google", null, "Failed", "Invalid Google token.");
+            throw new BusinessRuleException("Google sign-in failed. Please try again.");
+        }
+
+        if (!payload.EmailVerified || string.IsNullOrWhiteSpace(payload.Email))
+        {
+            await RecordLoginAttemptAsync(payload.Email ?? "google", null, "Failed", "Google email not verified.");
+            throw new BusinessRuleException("Your Google email address is not verified.");
+        }
+
+        var user = await _authRepository.GetByEmailAsync(payload.Email);
+
+        if (user == null)
+        {
+            user = new User
+            {
+                FullName = string.IsNullOrWhiteSpace(payload.Name) ? payload.Email : payload.Name,
+                Email = payload.Email,
+                Role = "Member",
+                IsActive = true
+            };
+            // Random password nobody knows: the account signs in through Google
+            // (or "Forgot password" if the user later wants a password).
+            user.PasswordHash = _passwordHasher.HashPassword(
+                user, Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"));
+
+            await _authRepository.AddAsync(user);
+            await _authRepository.SaveChangesAsync();
+        }
+        else if (!user.IsActive)
+        {
+            await RecordLoginAttemptAsync(payload.Email, user.UserId, "Failed", "Account inactive.");
+            throw new BusinessRuleException("This account is inactive.");
+        }
+
+        var started = await _sessions.StartAsync(
+            user.UserId, BuildDevice(dto.DeviceId, dto.DeviceName));
+
+        await RecordLogoutsAsync(started.ReplacedSessionIds);
+
+        if (started.Limit is not null)
+        {
+            return new AuthResponseDto { DeviceLimit = started.Limit };
+        }
+
+        return await SignInAsync(user, started.Session!, payload.Email);
     }
 
     public async Task<AuthResponseDto> CompleteLoginAsync(CompleteLoginDto dto)

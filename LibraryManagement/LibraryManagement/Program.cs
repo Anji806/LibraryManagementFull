@@ -130,6 +130,10 @@ builder.Services.AddScoped<ILoanNotificationService, LoanNotificationService>();
 builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 builder.Services.AddHostedService<NotificationBackgroundService>();
 
+// Google sign-in (section "GoogleAuth").
+builder.Services.Configure<GoogleAuthOptions>(
+    builder.Configuration.GetSection(GoogleAuthOptions.SectionName));
+
 // Forgot / reset password (section "PasswordReset").
 builder.Services.Configure<PasswordResetOptions>(
     builder.Configuration.GetSection(PasswordResetOptions.SectionName));

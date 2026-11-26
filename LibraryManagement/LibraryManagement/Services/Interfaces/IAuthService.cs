@@ -10,4 +10,6 @@ public interface IAuthService
 
     Task<AuthResponseDto> CompleteLoginAsync(CompleteLoginDto dto);
 
+    Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto dto);
+
 }
